@@ -455,27 +455,28 @@
             });
         }
 
-        function loadAllData() {
+        const API_KEY = '424d76cbcc3f4f36ef037355db9d3164';
+        
+        async function loadAllData() {
             document.getElementById('loading').style.display = 'block';
             document.getElementById('stationsContainer').style.display = 'none';
             
-            let loaded = 0;
             const stations = lines[currentLine].stations;
+            let loaded = 0;
 
-            stations.forEach(station => {
-                ginkoAPI('TA/getTempsAttente', { idArret: station.id }, 
-                    function(result) {
-                        updateStation(station.id, result);
-                        loaded++;
-                        if (loaded >= stations.length) finishLoading();
-                    },
-                    function(err) {
-                        console.log('Erreur:', station.id);
-                        loaded++;
-                        if (loaded >= stations.length) finishLoading();
-                    }
-                );
-            });
+            for (const station of stations) {
+                try {
+                    const url = `https://api.ginko.voyage/TA/getTempsAttente.do?apiKey=${API_KEY}&idArret=${station.id}`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    console.log(`Station ${station.id}:`, result);
+                    updateStation(station.id, result);
+                } catch (err) {
+                    console.error(`Erreur station ${station.id}:`, err);
+                }
+                loaded++;
+                if (loaded >= stations.length) finishLoading();
+            }
         }
 
         function updateStation(stationId, result) {
