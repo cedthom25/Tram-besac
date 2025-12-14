@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tram Ginko - Temps Réel</title>
+    <script>
+        // Proxy CORS pour contourner le blocage
+        const CORS_PROXY = 'https://corsproxy.io/?';
+        const GINKO_API_URL = 'https://api.ginko.voyage';  // Sans slash final
+        const API_KEY = 'aF9E7kQWJu22ip6pNGh87f8F3';
+        
+        // Fonction personnalisée pour remplacer ginkoAPI
+        async function ginkoAPI(methodPath, args, success, error, timeout) {
+            timeout = timeout || 15;
+            
+            // Construire les paramètres
+            let params = new URLSearchParams();
+            params.append('apiKey', API_KEY);
+            params.append('_tt', Date.now());
+            for (let key in args) {
+                params.append(key, args[key]);
+            }
+            
+            const url = CORS_PROXY + encodeURIComponent(GINKO_API_URL + '/' + methodPath + '.do');
+            
+            // Debug: afficher l'URL
+            if (methodPath.includes('getTempsAttente') || methodPath.includes('Liste')) {
+                console.log('URL appelée:', decodeURIComponent(url.replace(CORS_PROXY, '')));
+            }
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout * 1000);
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: params.toString(),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                
+                const data = await response.json();
+                
+                if (data.ok) {
+                    success(data.objets);
+                } else {
+                    if (error) error(data.msg || 'Erreur inconnue');
+                }
+            } catch (e) {
+                if (error) {
+                    if (e.name === 'AbortError') {
+                        error('Délai d\'attente écoulé');
+                    } else {
+                        error(e.message);
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 15px;
+            color: white;
+        }
+
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 20px; font-size: 1.8em; }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .line-btn {
+            padding: 12px 35px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            transition: all 0.3s;
+        }
+
+        .line-btn:hover { background: rgba(255,255,255,0.2); }
+        .line-btn.active { background: #4ade80; color: #1a1a2e; }
+
+        .line-display {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .header-row {
+            display: grid;
+            grid-template-columns: 40px minmax(60px, 80px) 1fr minmax(60px, 80px) 40px;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .header-dir {
+            font-weight: bold;
+            font-size: 0.85em;
+            text-align: center;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .header-dir.left { 
+            background: linear-gradient(135deg, #f59e0b, #d97706); 
+            color: #1a1a2e;
+            grid-column: 1 / 3;
+        }
+        
+        .header-dir.right { 
+            background: linear-gradient(135deg, #3b82f6, #2563eb); 
+            color: white;
+            grid-column: 4 / 6;
+        }
+
+        .header-center {
+            text-align: center;
+            font-size: 0.9em;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .station-row {
+            display: grid;
+            grid-template-columns: 40px minmax(60px, 80px) 1fr minmax(60px, 80px) 40px;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 6px;
+            padding: 4px 0;
+            min-height: 44px;
+        }
+
+        .line-left {
+            position: relative;
+            width: 40px;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .line-left::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -10px;
+            bottom: -10px;
+            width: 4px;
+            background: linear-gradient(180deg, #f59e0b, #d97706);
+            transform: translateX(-50%);
+        }
+
+        .dot-left {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border: 4px solid #f59e0b;
+            border-radius: 50%;
+            z-index: 2;
+            position: relative;
+        }
+
+        .dot-left.tram-here {
+            background: #4ade80;
+            border-color: #22c55e;
+            width: 26px;
+            height: 26px;
+            box-shadow: 0 0 15px rgba(74, 222, 128, 0.8);
+        }
+
+        .tram-icon-left {
+            position: absolute;
+            left: -25px;
+            font-size: 1.3em;
+            animation: bounce 1s infinite;
+        }
+
+        .line-right {
+            position: relative;
+            width: 40px;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .line-right::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -10px;
+            bottom: -10px;
+            width: 4px;
+            background: linear-gradient(180deg, #3b82f6, #2563eb);
+            transform: translateX(-50%);
+        }
+
+        .dot-right {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border: 4px solid #3b82f6;
+            border-radius: 50%;
+            z-index: 2;
+            position: relative;
+        }
+
+        .dot-right.tram-here {
+            background: #4ade80;
+            border-color: #22c55e;
+            width: 26px;
+            height: 26px;
+            box-shadow: 0 0 15px rgba(74, 222, 128, 0.8);
+        }
+
+        .tram-icon-right {
+            position: absolute;
+            right: -25px;
+            font-size: 1.3em;
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .time-left, .time-right {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .time-left { justify-content: flex-end; }
+        .time-right { justify-content: flex-start; }
+
+        .time-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 0.8em;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .time-badge.imminent {
+            background: #22c55e;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        .time-badge.soon {
+            background: #f59e0b;
+            color: #1a1a2e;
+        }
+
+        .time-badge.normal {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        .no-tram {
+            color: rgba(255,255,255,0.3);
+            font-size: 0.75em;
+        }
+
+        .station-name {
+            text-align: center;
+            font-size: 0.85em;
+            font-weight: 600;
+            padding: 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .station-name.has-tram {
+            background: rgba(74, 222, 128, 0.2);
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            font-size: 0.8em;
+            flex-wrap: wrap;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+
+        .legend-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.green { background: #4ade80; }
+        .legend-dot.orange { background: white; border: 3px solid #f59e0b; }
+        .legend-dot.blue { background: white; border: 3px solid #3b82f6; }
+
+        .refresh-btn {
+            display: block;
+            margin: 20px auto 0;
+            padding: 12px 30px;
+            background: #4ade80;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .refresh-btn:hover { background: #22c55e; }
+
+        .last-update {
+            text-align: center;
+            margin-top: 15px;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8em;
+        }
+
+        @media (max-width: 500px) {
+            .header-row, .station-row {
+                grid-template-columns: 36px minmax(50px, 1fr) auto minmax(50px, 1fr) 36px;
+                gap: 5px;
+            }
+            .line-left, .line-right { width: 36px; min-width: 36px; }
+            .station-name { font-size: 0.75em; padding: 6px 4px; }
+            .time-badge { padding: 3px 6px; font-size: 0.7em; }
+        }
+
+        .loading { text-align: center; padding: 40px; color: rgba(255,255,255,0.6); }
+
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        #stationsContainer { display: none; }
+
+        .credits {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.7em;
+            color: rgba(255,255,255,0.4);
+        }
+        .credits a { color: rgba(255,255,255,0.5); }
+
+        .debug {
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 8px;
+            font-size: 0.7em;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        .debug.show { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚊 Tram Besançon</h1>
+
+        <div class="controls">
+            <button class="line-btn active" onclick="selectLine('T1')">Ligne T1</button>
+            <button class="line-btn" onclick="selectLine('T2')">Ligne T2</button>
+        </div>
+
+        <div class="line-display">
+            <div class="header-row">
+                <div class="header-dir left" id="leftHeader">← Hauts Chazal</div>
+                <div class="header-center">Stations</div>
+                <div class="header-dir right" id="rightHeader">Chalezeule →</div>
+            </div>
+
+            <div id="loading" class="loading">Chargement...</div>
+            <div id="error" class="error" style="display:none;"></div>
+            
+            <div id="stationsContainer">
+                <div id="stations"></div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot green"></div><span>Tram à quai</span></div>
+            <div class="legend-item"><div class="legend-dot orange"></div><span>Vers Hauts Chazal</span></div>
+            <div class="legend-item"><div class="legend-dot blue"></div><span>Vers Chalezeule</span></div>
+        </div>
+
+        <button class="refresh-btn" onclick="loadAllData()">🔄 Actualiser</button>
+        <div id="lastUpdate" class="last-update"></div>
+        
+        <div class="credits">
+            Données <a href="https://api.ginko.voyage" target="_blank">Open Data Ginko</a>
+        </div>
+
+        <div id="debug" class="debug"></div>
+    </div>
+
+    <script>
+        let currentLine = 'T1';
+        let debugMode = true;
+
+        function log(msg) {
+            console.log(msg);
+            if (debugMode) {
+                const d = document.getElementById('debug');
+                d.classList.add('show');
+                d.innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '<br>';
+                d.scrollTop = d.scrollHeight;
+            }
+        }
+
+        // IDs basés sur la documentation SIRI - format t_xxx pour le tram
+        const linesConfig = {
+            T1: {
+                leftDir: 'Hauts du Chazal',
+                rightDir: 'Chalezeule',
+                leftShort: 'Hauts Chazal',
+                rightShort: 'Chalezeule',
+                stations: [
+                    {id: 't_hdc1', name: 'Hauts du Chazal'},
+                    {id: 't_epoi', name: 'Époisses'},
+                    {id: 't_orch', name: 'Orchamps'},
+                    {id: 't_haut', name: 'Hauts de St Claude'},
+                    {id: 't_temi', name: 'Témis'},
+                    {id: 't_pala', name: 'Palais des Sports'},
+                    {id: 't_mico', name: 'Micropolis'},
+                    {id: 't_peti', name: 'Petites Baraques'},
+                    {id: 't_irai', name: 'Irai'},
+                    {id: 't_trey', name: 'Trépillot'},
+                    {id: 't_fran', name: 'Franois Village'},
+                    {id: 't_chap', name: 'Champs Montants'},
+                    {id: 't_gare', name: 'Gare Viotte'},
+                    {id: 't_viot', name: 'Viotte'},
+                    {id: 't_flor', name: 'Flore'},
+                    {id: 't_gran', name: 'Granvelle'},
+                    {id: 't_repu', name: 'République'},
+                    {id: 't_revo', name: 'Révolution'},
+                    {id: 't_came', name: 'Canot'},
+                    {id: 't_chal', name: 'Chalezeule'}
+                ]
+            },
+            T2: {
+                leftDir: 'Hauts du Chazal',
+                rightDir: 'Gare Viotte',
+                leftShort: 'Hauts Chazal',
+                rightShort: 'Gare Viotte',
+                stations: [
+                    {id: 't_hdc2', name: 'Hauts du Chazal'},
+                    {id: 't_epo2', name: 'Époisses'},
+                    {id: 't_orc2', name: 'Orchamps'},
+                    {id: 't_hau2', name: 'Hauts de St Claude'},
+                    {id: 't_tem2', name: 'Témis'},
+                    {id: 't_pal2', name: 'Palais des Sports'},
+                    {id: 't_mic2', name: 'Micropolis'},
+                    {id: 't_pet2', name: 'Petites Baraques'},
+                    {id: 't_ira2', name: 'Irai'},
+                    {id: 't_tre2', name: 'Trépillot'},
+                    {id: 't_fra2', name: 'Franois Village'},
+                    {id: 't_cha2', name: 'Champs Montants'},
+                    {id: 't_gar2', name: 'Gare Viotte'}
+                ]
+            }
+        };
+
+        function selectLine(line) {
+            currentLine = line;
+            document.querySelectorAll('.line-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const info = linesConfig[line];
+            document.getElementById('leftHeader').textContent = '← ' + info.leftShort;
+            document.getElementById('rightHeader').textContent = info.rightShort + ' →';
+            
+            buildStations();
+            loadAllData();
+        }
+
+        function buildStations() {
+            const container = document.getElementById('stations');
+            container.innerHTML = '';
+            
+            linesConfig[currentLine].stations.forEach(station => {
+                const row = document.createElement('div');
+                row.className = 'station-row';
+                row.innerHTML = `
+                    <div class="line-left" id="lineleft-${station.id}">
+                        <div class="dot-left" id="dotleft-${station.id}"></div>
+                    </div>
+                    <div class="time-left" id="timeleft-${station.id}">
+                        <span class="no-tram">--</span>
+                    </div>
+                    <div class="station-name" id="name-${station.id}">${station.name}</div>
+                    <div class="time-right" id="timeright-${station.id}">
+                        <span class="no-tram">--</span>
+                    </div>
+                    <div class="line-right" id="lineright-${station.id}">
+                        <div class="dot-right" id="dotright-${station.id}"></div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // Test d'abord avec UN SEUL arrêt connu
+        function loadAllData() {
+            const stations = linesConfig[currentLine].stations;
+            
+            log('Chargement ' + stations.length + ' stations...');
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').textContent = 'Chargement...';
+            document.getElementById('stationsContainer').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            
+            let loaded = 0;
+            let errors = 0;
+            let successIds = [];
+
+            stations.forEach(station => {
+                ginkoAPI('TA/getTempsAttente', { idArret: station.id }, 
+                    function(result) {
+                        successIds.push(station.id);
+                        updateStation(station.id, result);
+                        loaded++;
+                        if (loaded + errors >= stations.length) {
+                            log('Stations OK: ' + successIds.join(', '));
+                            finishLoading(errors);
+                        }
+                    },
+                    function(err) {
+                        errors++;
+                        if (loaded + errors >= stations.length) {
+                            log('Erreurs: ' + errors + '/' + stations.length);
+                            finishLoading(errors);
+                        }
+                    }
+                );
+            });
+        }
+
+        function updateStation(stationId, result) {
+            const lineInfo = linesConfig[currentLine];
+            let leftTimes = [];
+            let rightTimes = [];
+
+            if (result && result.listePassages) {
+                log(stationId + ': ' + result.listePassages.length + ' passages');
+                result.listePassages.forEach(p => {
+                    // Log le premier passage pour debug
+                    if (leftTimes.length === 0 && rightTimes.length === 0) {
+                        log('  Passage: ligne=' + p.ligne + ', dest=' + p.destination + ', temps=' + p.tempsAttente);
+                    }
+                    
+                    if (p.ligne === currentLine || p.ligne === 'T1' || p.ligne === 'T2') {
+                        const t = parseInt(p.tempsAttente);
+                        const dest = p.destination.toLowerCase();
+                        const leftKey = lineInfo.leftDir.split(' ')[0].toLowerCase();
+                        
+                        if (dest.includes(leftKey) || dest.includes('haut') || dest.includes('chazal')) {
+                            leftTimes.push(t);
+                        } else {
+                            rightTimes.push(t);
+                        }
+                    }
+                });
+            }
+
+            updateSide('left', stationId, leftTimes);
+            updateSide('right', stationId, rightTimes);
+
+            const nameDiv = document.getElementById('name-' + stationId);
+            if (nameDiv) {
+                if ((leftTimes.length && leftTimes[0] <= 1) || (rightTimes.length && rightTimes[0] <= 1)) {
+                    nameDiv.classList.add('has-tram');
+                } else {
+                    nameDiv.classList.remove('has-tram');
+                }
+            }
+        }
+
+        function updateSide(side, stationId, times) {
+            const timeDiv = document.getElementById('time' + side + '-' + stationId);
+            const dotDiv = document.getElementById('dot' + side + '-' + stationId);
+            const lineDiv = document.getElementById('line' + side + '-' + stationId);
+            
+            if (!timeDiv || !dotDiv || !lineDiv) return;
+
+            const oldIcon = lineDiv.querySelector('.tram-icon-' + side);
+            if (oldIcon) oldIcon.remove();
+
+            if (times.length > 0) {
+                timeDiv.innerHTML = times.slice(0, 2).map(t => timeBadge(t)).join('');
+                if (times[0] <= 1) {
+                    dotDiv.classList.add('tram-here');
+                    const icon = document.createElement('div');
+                    icon.className = 'tram-icon-' + side;
+                    icon.textContent = '🚊';
+                    lineDiv.appendChild(icon);
+                } else {
+                    dotDiv.classList.remove('tram-here');
+                }
+            } else {
+                timeDiv.innerHTML = '<span class="no-tram">--</span>';
+                dotDiv.classList.remove('tram-here');
+            }
+        }
+
+        function timeBadge(t) {
+            if (t <= 2) return '<div class="time-badge imminent">' + t + '</div>';
+            if (t <= 5) return '<div class="time-badge soon">' + t + '</div>';
+            return '<div class="time-badge normal">' + t + '</div>';
+        }
+
+        function finishLoading(errorCount) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('stationsContainer').style.display = 'block';
+            
+            if (errorCount > 0) {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = errorCount + ' erreur(s) sur ' + linesConfig[currentLine].stations.length;
+            }
+            
+            document.getElementById('lastUpdate').textContent = 'Mise à jour : ' + new Date().toLocaleTimeString('fr-FR');
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').textContent = msg;
+            log('ERREUR: ' + msg);
+        }
+
+        // Test de diagnostic
+        function runDiagnostics() {
+            log('=== DIAGNOSTIC API (via proxy CORS) ===');
+            log('Proxy: ' + CORS_PROXY);
+            log('API Ginko: ' + GINKO_API_URL);
+            log('API Key: ' + API_KEY.substring(0, 8) + '...');
+            
+            // Tester plusieurs formats d'endpoint
+            const endpoints = [
+                'TA/getTempsAttente',
+                'TR/getTempsAttente', 
+                'getTempsAttente',
+                'tempsattente/get',
+                'DR/getTempsAttente'
+            ];
+            
+            log('Test de différents endpoints...');
+            
+            endpoints.forEach(ep => {
+                testEndpoint(ep, 't_hdc1');
+            });
+            
+            // Aussi tester la liste des arrêts
+            setTimeout(() => {
+                log('--- Test liste arrêts ---');
+                testEndpoint('DR/getListeArrets', null);
+                testEndpoint('getListeArrets', null);
+            }, 2000);
+        }
+        
+        function testEndpoint(endpoint, idArret) {
+            const args = idArret ? { idArret: idArret } : {};
+            
+            ginkoAPI(endpoint, args, 
+                function(result) {
+                    log('✅ ' + endpoint + ' OK! ' + JSON.stringify(result).substring(0, 100));
+                },
+                function(err) {
+                    log('❌ ' + endpoint + ': ' + err);
+                },
+                10
+            );
+        }
+
+        window.onload = function() {
+            log('Démarrage...');
+            buildStations();
+            runDiagnostics();
+            
+            setInterval(function() {
+                loadAllData();
+            }, 60000);
+        };
+    </script>
+</body>
+</html>
