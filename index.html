@@ -604,18 +604,13 @@
 </div>
 
 
+<!-- api.js chargé via le Worker proxy (pas depuis api.ginko.voyage directement) -->
+<script src="https://cold-rain-f589.cedric-thomas6.workers.dev/api.js?apiKey=5e1e09e6ee664d6abeade41fe0597cf3"></script>
 <script>
 (function() {
     'use strict';
 
-    // ═══════════════════════════════════════════════════════════════
-    // ⚠️  REMPLACE CETTE URL par celle de ton Cloudflare Worker !
-    //     Ex: https://ginko-proxy.ton-nom.workers.dev
-    // ═══════════════════════════════════════════════════════════════
-    var WORKER_URL = 'https://cold-rain-f589.cedric-thomas6.workers.dev';
-
     var REFRESH_INTERVAL = 45000;
-    var TIMEOUT = 12000;
 
     var LINES = {
         T1: {
@@ -664,29 +659,17 @@
         el.parentElement.scrollTop = el.parentElement.scrollHeight;
     }
 
-    // ─── API call via Cloudflare Worker ─────────────────
-    function apiCall(method, params) {
-        var url = WORKER_URL + '?method=' + encodeURIComponent(method);
-        for (var k in params) {
-            if (params.hasOwnProperty(k)) url += '&' + k + '=' + encodeURIComponent(params[k]);
-        }
-
+    // ─── API wrapper using ginkoAPI (loaded from Worker proxy) ──
+    function callAPI(method, params) {
         return new Promise(function(resolve, reject) {
-            var timer = setTimeout(function() { reject(new Error('Timeout')); }, TIMEOUT);
-            
-            fetch(url).then(function(res) {
-                clearTimeout(timer);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.json();
-            }).then(function(data) {
-                if (data.ok === false) throw new Error(data.msg || 'Erreur API');
-                logConn('ok', method + ' ✓', 'ok');
-                resolve(data);
-            }).catch(function(e) {
-                clearTimeout(timer);
-                logConn('err', method + ': ' + e.message, 'err');
-                reject(e);
-            });
+            if (typeof ginkoAPI === 'undefined') {
+                reject(new Error('ginkoAPI non chargé'));
+                return;
+            }
+            ginkoAPI(method, params || {},
+                function(data) { resolve(data); },
+                function(err) { reject(new Error(err || 'Erreur API')); }
+            );
         });
     }
 
@@ -709,8 +692,8 @@
 
     function fetchStation(index) {
         var s = LINES[currentLine].stations[index];
-        return apiCall('TA/getTempsAttente', {idArret: s.id}).then(function(data) {
-            updateStation(index, data.objets);
+        return callAPI('TA/getTempsAttente', {idArret: s.id}).then(function(data) {
+            updateStation(index, data);
             return {ok:true};
         }).catch(function(e) {
             updateStation(index, null);
@@ -722,7 +705,6 @@
         var line = LINES[currentLine];
         var queue = [];
         for (var i = 0; i < line.stations.length; i++) queue.push(i);
-
         var results = [];
         function batch(start) {
             var b = queue.slice(start, start + 4);
@@ -737,22 +719,8 @@
 
     function updateStation(index, data) {
         var left = [], right = [];
-        var passages = null;
-        
-        if (data) {
-            if (data.listePassages) {
-                passages = data.listePassages;
-            } else if (Array.isArray(data)) {
-                data.forEach(function(stop) {
-                    if (stop.listePassages) {
-                        passages = (passages || []).concat(stop.listePassages);
-                    }
-                });
-            }
-        }
-        
-        if (passages) {
-            passages.forEach(function(p) {
+        if (data && data.listePassages) {
+            data.listePassages.forEach(function(p) {
                 var ln = (p.ligne||'').toUpperCase();
                 if (currentLine==='T1' && ln==='T2') return;
                 if (currentLine==='T2' && ln==='T1') return;
@@ -814,7 +782,6 @@
             $('updateInfo').textContent = 'Mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — '+ok+'/'+total+' stations';
         }).catch(function(e) {
             logConn('err', 'Échec: '+e.message, 'err');
-            $('updateInfo').textContent = 'Erreur — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
         }).finally(function() {
             isLoading = false;
             btn.classList.remove('loading');
@@ -822,8 +789,7 @@
     };
 
     function fetchTrafficInfo() {
-        apiCall('IT/getInfosTrafic', {}).then(function(data) {
-            var result = data.objets;
+        callAPI('IT/getInfosTrafic', {}).then(function(result) {
             if (!result || !Array.isArray(result)) return;
             var alerts = result.filter(function(it) {
                 return (it.lignes||[]).some(function(l){return l==='T1'||l==='T2'||l==='101'||l==='102';});
@@ -837,41 +803,31 @@
     }
 
     function init() {
-        logConn('info', '<b>Démarrage v4</b> — Cloudflare Worker proxy', '');
-        logConn('info', 'Worker: ' + WORKER_URL.replace('https://',''), 'dim');
+        logConn('info', '<b>Démarrage v7</b> — api.js via reverse proxy Worker', '');
+        logConn('info', 'Proxy: cold-rain-f589.cedric-thomas6.workers.dev', 'dim');
 
-        if (WORKER_URL.indexOf('REMPLACE') >= 0) {
-            logConn('err', '⚠️ Tu dois configurer WORKER_URL ! Voir les instructions.', 'err');
+        if (typeof ginkoAPI === 'undefined') {
+            logConn('err', 'ginkoAPI NON CHARGÉ', 'err');
             $('stateContainer').innerHTML =
-                '<div class="state-icon">⚙️</div>' +
-                '<div class="title">Configuration requise</div>' +
-                '<div class="desc">Tu dois créer un Cloudflare Worker et mettre son URL dans le code.<br><br>' +
-                '<b>Étapes :</b><br>' +
-                '1. Va sur <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--accent-right)">workers.cloudflare.com</a> (gratuit)<br>' +
-                '2. Crée un Worker avec le code du fichier <code>ginko-proxy-worker.js</code><br>' +
-                '3. Copie l\'URL du worker<br>' +
-                '4. Remplace <code>WORKER_URL</code> dans ce fichier</div>';
+                '<div class="state-icon">❌</div>' +
+                '<div class="title">api.js non chargé</div>' +
+                '<div class="desc error">Le script api.js via le proxy n\'a pas pu être chargé.</div>';
             return;
+        }
+        logConn('ok', 'ginkoAPI chargé ✓', 'ok');
+        
+        // Log where ginkoAPI thinks the server is
+        if (typeof ginkoServerURL !== 'undefined') {
+            logConn('info', 'ginkoServerURL = ' + ginkoServerURL, 'dim');
         }
 
         logConn('info', 'Test: TA/getTempsAttente sur t_repu…', 'dim');
-        apiCall('TA/getTempsAttente', {idArret:'t_repu'}).then(function(data) {
-            var objets = data.objets;
-            var nb = objets && objets.listePassages ? objets.listePassages.length : 0;
+        callAPI('TA/getTempsAttente', {idArret:'t_repu'}).then(function(data) {
+            var nb = data && data.listePassages ? data.listePassages.length : 0;
             logConn('ok', '<b>API OK ✓</b> — '+nb+' passages à République', 'ok');
-            $('stateContainer').innerHTML =
-                '<div class="state-icon">✅</div>' +
-                '<div class="title">Connexion établie</div>' +
-                '<div class="desc">Chargement des données…</div>';
         }).catch(function(e) {
-            logConn('err', 'Échec: ' + e.message, 'err');
-            $('stateContainer').innerHTML =
-                '<div class="state-icon">❌</div>' +
-                '<div class="title">Connexion impossible</div>' +
-                '<div class="desc error">Le Worker ne répond pas. Vérifie l\'URL et que le Worker est déployé.</div>' +
-                '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:var(--text);cursor:pointer;font-size:14px;">↻ Réessayer</button>';
+            logConn('err', 'Test: ' + e.message, 'err');
         }).then(function() {
-            if (WORKER_URL.indexOf('REMPLACE') >= 0) return;
             buildStations();
             refreshData();
             fetchTrafficInfo();
@@ -881,10 +837,29 @@
         });
     }
 
+    // Wait for ginkoAPI to be defined (api.js might load async)
+    var tries = 0;
+    function waitForAPI() {
+        if (typeof ginkoAPI !== 'undefined') {
+            init();
+        } else if (tries > 20) {
+            logConn('err', 'ginkoAPI introuvable après 10s', 'err');
+            $('stateContainer').innerHTML =
+                '<div class="state-icon">❌</div>' +
+                '<div class="title">api.js non chargé</div>' +
+                '<div class="desc error">Le script n\'a pas pu être chargé via le proxy Worker.</div>' +
+                '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:var(--text);cursor:pointer;font-size:14px;">↻ Réessayer</button>';
+        } else {
+            tries++;
+            logConn('info', 'Attente api.js… (' + tries + ')', 'dim');
+            setTimeout(waitForAPI, 500);
+        }
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', waitForAPI);
     } else {
-        init();
+        waitForAPI();
     }
 })();
 </script>
