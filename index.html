@@ -117,12 +117,10 @@
         /* ── Stations ── */
         .stations-wrap { padding:0 10px; }
         .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; position:relative; }
-        /* Continuous vertical track lines */
-        .stations::before, .stations::after {
-            content:''; position:absolute; top:23px; bottom:23px; width:2px; transform:translateX(-50%); z-index:1; pointer-events:none;
-        }
-        .stations::before { left:calc(50% - 72px); background:var(--left); opacity:.2; }
-        .stations::after  { left:calc(50% + 72px); background:var(--right); opacity:.2; }
+        /* Track lines positioned by JS */
+        .track-line { position:absolute; top:23px; bottom:23px; width:2px; opacity:.2; z-index:1; pointer-events:none; }
+        .track-line.left { background:var(--left); }
+        .track-line.right { background:var(--right); }
 
         .station-group { position:relative; }
         .station-group:last-child .station-row::after { display:none; }
@@ -259,8 +257,6 @@
         /* ── Responsive ── */
         @media(max-width:420px) {
             .station-row { grid-template-columns:1fr 20px 100px 20px 1fr; padding:0 8px; min-height:42px; }
-            .stations::before { left:calc(50% - 60px); }
-            .stations::after  { left:calc(50% + 60px); }
             .station-name { font-size:.66rem; }
             .time-chip { font-size:.62rem; padding:2px 5px; }
             .dir-tag { font-size:.48rem; }
@@ -487,6 +483,10 @@ function workerFetch(url){return new Promise(function(ok,ko){var t=setTimeout(fu
 function buildStations(){
     var line=LINES[currentLine], c=$('stationsList');
     c.innerHTML=''; openDetail=-1;
+    // Add track line elements
+    var tlL=document.createElement('div');tlL.className='track-line left';tlL.id='trackLineL';c.appendChild(tlL);
+    var tlR=document.createElement('div');tlR.className='track-line right';tlR.id='trackLineR';c.appendChild(tlR);
+
     line.stations.forEach(function(name,i){
         var fav=isFav(name);
         // Wrapper group
@@ -512,6 +512,23 @@ function buildStations(){
         g.appendChild(dp);
         c.appendChild(g);
     });
+    requestAnimationFrame(positionTrackLines);
+}
+
+function positionTrackLines(){
+    var c=$('stationsList');
+    var dlEl=document.getElementById('dl-0');
+    var drEl=document.getElementById('dr-0');
+    if(!c||!dlEl||!drEl)return;
+    var cRect=c.getBoundingClientRect();
+    var lRect=dlEl.getBoundingClientRect();
+    var rRect=drEl.getBoundingClientRect();
+    var lx=lRect.left+lRect.width/2-cRect.left;
+    var rx=rRect.left+rRect.width/2-cRect.left;
+    var tlL=document.getElementById('trackLineL');
+    var tlR=document.getElementById('trackLineR');
+    if(tlL)tlL.style.left=(lx-1)+'px';
+    if(tlR)tlR.style.left=(rx-1)+'px';
 }
 
 function toggleDetail(idx){
@@ -695,6 +712,7 @@ window.refreshData=function(){
         $('liveDot').classList.toggle('offline',ok===0);
         $('updateInfo').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
         startCountdown();
+        requestAnimationFrame(positionTrackLines);
     }).catch(function(e){
         logConn('err',e.message,'err');
         $('updateInfo').textContent='Erreur';
@@ -718,6 +736,7 @@ function fetchTrafficInfo(){
 function init(){
     logConn('info','<b>v16</b> — TR/getListeTemps + favoris + géoloc','');
     renderFavBar();
+    window.addEventListener('resize',function(){requestAnimationFrame(positionTrackLines);});
     var testUrl=WORKER+'?method=temps&nom='+encodeURIComponent('République')+'&ligne=101&sens=false&nb=3';
     workerFetch(testUrl).then(function(data){
         if(!data.ok)throw new Error(data.msg);
