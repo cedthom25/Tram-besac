@@ -116,7 +116,13 @@
 
         /* ── Stations ── */
         .stations-wrap { padding:0 10px; }
-        .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+        .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; position:relative; }
+        /* Continuous vertical track lines */
+        .stations::before, .stations::after {
+            content:''; position:absolute; top:23px; bottom:23px; width:2px; transform:translateX(-50%); z-index:1; pointer-events:none;
+        }
+        .stations::before { left:calc(50% - 72px); background:var(--left); opacity:.2; }
+        .stations::after  { left:calc(50% + 72px); background:var(--right); opacity:.2; }
 
         .station-group { position:relative; }
         .station-group:last-child .station-row::after { display:none; }
@@ -161,12 +167,7 @@
         .no-data { font-size:.55rem; color:var(--text3); }
 
         /* ── Track ── */
-        .track { position:relative; display:flex; align-items:center; justify-content:center; height:100%; min-height:46px; }
-        .track::before { content:''; position:absolute; top:0; bottom:0; left:50%; width:2px; transform:translateX(-50%); opacity:.2; }
-        .track.left::before { background:var(--left); }
-        .track.right::before { background:var(--right); }
-        .station-group:first-child .track::before { top:50%; }
-        .station-group:last-child .track::before { bottom:50%; }
+        .track { position:relative; display:flex; align-items:center; justify-content:center; height:100%; min-height:46px; z-index:2; }
         .dot { width:8px; height:8px; border-radius:50%; background:var(--card); border:2px solid; z-index:2; transition:all .4s cubic-bezier(.4,0,.2,1); }
         .dot.left { border-color:rgba(255,159,67,.35); }
         .dot.right { border-color:rgba(95,108,245,.35); }
@@ -258,6 +259,8 @@
         /* ── Responsive ── */
         @media(max-width:420px) {
             .station-row { grid-template-columns:1fr 20px 100px 20px 1fr; padding:0 8px; min-height:42px; }
+            .stations::before { left:calc(50% - 60px); }
+            .stations::after  { left:calc(50% + 60px); }
             .station-name { font-size:.66rem; }
             .time-chip { font-size:.62rem; padding:2px 5px; }
             .dir-tag { font-size:.48rem; }
