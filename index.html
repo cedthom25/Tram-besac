@@ -617,20 +617,24 @@
             id: '101',
             leftDir: 'Hauts du Chazal', rightDir: 'Chalezeule',
             stations: [
-                'Hauts du Chazal','Époisses','CHU Minjoz','Orchamps',
-                'Maison des Familles','Témis','Palais des Sports','Micropolis',
-                'Petit Chamars','Chamars','Trépillot','Gare Viotte',
-                'Lycée Jules Haag','Flore','Granvelle','République',
-                'Révolution','Parc Micaud','Canot','Marnières','Chalezeule'
+                'Hauts du Chazal','UFR Santé','Maison des Familles','CHU Minjoz',
+                'Île-de-France','Époisses','Allende','Micropolis',
+                'Malcombe','Rosemont','Brulard','Polygone',
+                'Chamars','Canot','Battant','Révolution',
+                'République','Parc Micaud','Fontaine Argent','Tristan Bernard',
+                'Brûlefoin','Les Vaîtes','Schweitzer','Croix de Palente',
+                'Lilas','Orchamps','Fort Benoît','Marnières','Chalezeule'
             ]
         },
         T2: {
             id: '102',
             leftDir: 'Hauts du Chazal', rightDir: 'Gare Viotte',
             stations: [
-                'Hauts du Chazal','Époisses','CHU Minjoz','Orchamps',
-                'Maison des Familles','Témis','Palais des Sports','Micropolis',
-                'Petit Chamars','Chamars','Trépillot','Gare Viotte'
+                'Hauts du Chazal','UFR Santé','Maison des Familles','CHU Minjoz',
+                'Île-de-France','Époisses','Allende','Micropolis',
+                'Malcombe','Rosemont','Brulard','Polygone',
+                'Chamars','Canot','Battant','Révolution',
+                'République','Parc Micaud','Flore','Gare Viotte'
             ]
         }
     };
@@ -689,59 +693,75 @@
         var ligneId = line.id;
         var url = WORKER + '?method=batch&noms=' + encodeURIComponent(noms) + '&ligne=' + ligneId + '&nb=3';
 
-        logConn('info', 'TR/getListeTemps batch (' + line.stations.length + ' stations)…', 'dim');
+        logConn('info', 'TR/getListeTemps batch (' + line.stations.length + ' stations, ligne ' + ligneId + ')…', 'dim');
 
         return workerFetch(url).then(function(data) {
             if (!data.ok) throw new Error(data.msg || 'Erreur batch');
 
-            // Build lookup: station name -> { left: [], right: [] }
+            // Build lookup: station name (lowercase) -> { left: [], right: [] }
             var lookup = {};
+            var apiNames = {}; // Track actual API names for debugging
 
-            // Process aller (sensAller=true) results
+            // Process aller (sensAller=true) = towards rightDir (Chalezeule/Gare Viotte)
             if (data.aller && data.aller.ok && data.aller.objets) {
                 data.aller.objets.forEach(function(lieu) {
-                    var nom = lieu.nomExact;
-                    if (!lookup[nom]) lookup[nom] = { left: [], right: [] };
+                    var key = lieu.nomExact.toLowerCase();
+                    apiNames[key] = lieu.nomExact;
+                    if (!lookup[key]) lookup[key] = { left: [], right: [] };
                     (lieu.listeTemps || []).forEach(function(t) {
-                        // sensAller=true means going towards the "aller" terminus (rightDir)
-                        lookup[nom].right.push(t.tempsEnMinute);
+                        lookup[key].right.push({min: t.tempsEnMinute, dest: t.destination, fiable: t.fiable});
                     });
                 });
             }
 
-            // Process retour (sensAller=false) results
+            // Process retour (sensAller=false) = towards leftDir (Hauts du Chazal)
             if (data.retour && data.retour.ok && data.retour.objets) {
                 data.retour.objets.forEach(function(lieu) {
-                    var nom = lieu.nomExact;
-                    if (!lookup[nom]) lookup[nom] = { left: [], right: [] };
+                    var key = lieu.nomExact.toLowerCase();
+                    apiNames[key] = lieu.nomExact;
+                    if (!lookup[key]) lookup[key] = { left: [], right: [] };
                     (lieu.listeTemps || []).forEach(function(t) {
-                        // sensAller=false means going towards the "retour" terminus (leftDir)
-                        lookup[nom].left.push(t.tempsEnMinute);
+                        lookup[key].left.push({min: t.tempsEnMinute, dest: t.destination, fiable: t.fiable});
                     });
                 });
+            }
+
+            // Log API names for debugging
+            var foundNames = Object.keys(apiNames);
+            if (foundNames.length > 0) {
+                logConn('ok', 'API nomExact: ' + foundNames.map(function(k){return apiNames[k];}).join(', '), 'dim');
             }
 
             // Update each station
             var okCount = 0;
+            var missingNames = [];
             line.stations.forEach(function(name, i) {
-                var info = lookup[name];
-                if (info) {
-                    info.left.sort(function(a,b){return a-b;});
-                    info.right.sort(function(a,b){return a-b;});
-                    renderTimes('tl-'+i, 'dl-'+i, info.left);
-                    renderTimes('tr-'+i, 'dr-'+i, info.right);
+                var key = name.toLowerCase();
+                var info = lookup[key];
+                if (info && (info.left.length || info.right.length)) {
+                    var leftMins = info.left.map(function(t){return t.min;});
+                    var rightMins = info.right.map(function(t){return t.min;});
+                    leftMins.sort(function(a,b){return a-b;});
+                    rightMins.sort(function(a,b){return a-b;});
+                    renderTimes('tl-'+i, 'dl-'+i, leftMins);
+                    renderTimes('tr-'+i, 'dr-'+i, rightMins);
                     var n = $('sn-'+i);
                     if (n) n.classList.toggle('highlight',
-                        !!(info.left.length && info.left[0]<=1) ||
-                        !!(info.right.length && info.right[0]<=1));
-                    if (info.left.length || info.right.length) okCount++;
+                        !!(leftMins.length && leftMins[0]<=1) ||
+                        !!(rightMins.length && rightMins[0]<=1));
+                    okCount++;
                 } else {
                     renderTimes('tl-'+i, 'dl-'+i, []);
                     renderTimes('tr-'+i, 'dr-'+i, []);
+                    if (foundNames.length > 0) missingNames.push(name);
                 }
             });
 
-            logConn('ok', 'Batch OK — ' + okCount + '/' + line.stations.length + ' stations avec passages', 'ok');
+            if (missingNames.length > 0 && foundNames.length > 0) {
+                logConn('warn', 'Sans données: ' + missingNames.join(', '), 'warn');
+            }
+
+            logConn('ok', 'Résultat: ' + okCount + '/' + line.stations.length + ' stations avec passages', 'ok');
             return okCount;
         });
     }
