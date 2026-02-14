@@ -604,40 +604,33 @@
 </div>
 
 
-<!-- api.js chargé via le Worker proxy (pas depuis api.ginko.voyage directement) -->
-<script src="https://cold-rain-f589.cedric-thomas6.workers.dev/api.js?apiKey=5e1e09e6ee664d6abeade41fe0597cf3"></script>
 <script>
 (function() {
     'use strict';
 
-    var REFRESH_INTERVAL = 45000;
+    var WORKER = 'https://cold-rain-f589.cedric-thomas6.workers.dev';
+    var REFRESH_INTERVAL = 30000;
+    var TIMEOUT = 15000;
 
     var LINES = {
         T1: {
+            id: '101',
             leftDir: 'Hauts du Chazal', rightDir: 'Chalezeule',
             stations: [
-                {name:'Hauts du Chazal',id:'t_hdc1'},{name:'Époisses',id:'t_epoi'},
-                {name:'CHU Minjoz',id:'t_chum'},{name:'Orchamps',id:'t_orch'},
-                {name:'Maison des Familles',id:'t_mais'},{name:'Témis',id:'t_temi'},
-                {name:'Palais des Sports',id:'t_pala'},{name:'Micropolis',id:'t_micr'},
-                {name:'Petit Chamars',id:'t_peti'},{name:'Chamars',id:'t_cham'},
-                {name:'Trépillot',id:'t_trep'},{name:'Gare Viotte',id:'t_gare'},
-                {name:'Lycée Jules Haag',id:'t_jule'},{name:'Flore',id:'t_flor'},
-                {name:'Granvelle',id:'t_gran'},{name:'République',id:'t_repu'},
-                {name:'Révolution',id:'t_revo'},{name:'Parc Micaud',id:'t_parc'},
-                {name:'Canot',id:'t_cano'},{name:'Marnières',id:'t_marn'},
-                {name:'Chalezeule',id:'t_chal'}
+                'Hauts du Chazal','Époisses','CHU Minjoz','Orchamps',
+                'Maison des Familles','Témis','Palais des Sports','Micropolis',
+                'Petit Chamars','Chamars','Trépillot','Gare Viotte',
+                'Lycée Jules Haag','Flore','Granvelle','République',
+                'Révolution','Parc Micaud','Canot','Marnières','Chalezeule'
             ]
         },
         T2: {
+            id: '102',
             leftDir: 'Hauts du Chazal', rightDir: 'Gare Viotte',
             stations: [
-                {name:'Hauts du Chazal',id:'t_hdc2'},{name:'Époisses',id:'t_epo2'},
-                {name:'CHU Minjoz',id:'t_chu2'},{name:'Orchamps',id:'t_orc2'},
-                {name:'Maison des Familles',id:'t_mai2'},{name:'Témis',id:'t_tem2'},
-                {name:'Palais des Sports',id:'t_pal2'},{name:'Micropolis',id:'t_mic2'},
-                {name:'Petit Chamars',id:'t_pet2'},{name:'Chamars',id:'t_cha2'},
-                {name:'Trépillot',id:'t_tre2'},{name:'Gare Viotte',id:'t_gar2'}
+                'Hauts du Chazal','Époisses','CHU Minjoz','Orchamps',
+                'Maison des Familles','Témis','Palais des Sports','Micropolis',
+                'Petit Chamars','Chamars','Trépillot','Gare Viotte'
             ]
         }
     };
@@ -659,17 +652,17 @@
         el.parentElement.scrollTop = el.parentElement.scrollHeight;
     }
 
-    // ─── API wrapper using ginkoAPI (loaded from Worker proxy) ──
-    function callAPI(method, params) {
+    function workerFetch(url) {
         return new Promise(function(resolve, reject) {
-            if (typeof ginkoAPI === 'undefined') {
-                reject(new Error('ginkoAPI non chargé'));
-                return;
-            }
-            ginkoAPI(method, params || {},
-                function(data) { resolve(data); },
-                function(err) { reject(new Error(err || 'Erreur API')); }
-            );
+            var timer = setTimeout(function() { reject(new Error('Timeout')); }, TIMEOUT);
+            fetch(url).then(function(res) {
+                clearTimeout(timer);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            }).then(resolve).catch(function(e) {
+                clearTimeout(timer);
+                reject(e);
+            });
         });
     }
 
@@ -677,75 +670,90 @@
         var line = LINES[currentLine];
         var c = $('stationsList');
         c.innerHTML = '';
-        line.stations.forEach(function(s, i) {
+        line.stations.forEach(function(name, i) {
             var r = document.createElement('div');
             r.className = 'station-row';
             r.innerHTML =
                 '<div class="times left" id="tl-'+i+'"><span class="no-data">—</span></div>'+
                 '<div class="track left"><div class="dot left" id="dl-'+i+'"></div></div>'+
-                '<div class="station-name" id="sn-'+i+'">'+s.name+'</div>'+
+                '<div class="station-name" id="sn-'+i+'">'+name+'</div>'+
                 '<div class="track right"><div class="dot right" id="dr-'+i+'"></div></div>'+
                 '<div class="times right" id="tr-'+i+'"><span class="no-data">—</span></div>';
             c.appendChild(r);
         });
     }
 
-    function fetchStation(index) {
-        var s = LINES[currentLine].stations[index];
-        return callAPI('TA/getTempsAttente', {idArret: s.id}).then(function(data) {
-            updateStation(index, data);
-            return {ok:true};
-        }).catch(function(e) {
-            updateStation(index, null);
-            return {ok:false};
-        });
-    }
-
     function fetchAllTimes() {
         var line = LINES[currentLine];
-        var queue = [];
-        for (var i = 0; i < line.stations.length; i++) queue.push(i);
-        var results = [];
-        function batch(start) {
-            var b = queue.slice(start, start + 4);
-            if (!b.length) return Promise.resolve(results);
-            return Promise.all(b.map(fetchStation)).then(function(r) {
-                results = results.concat(r);
-                return batch(start + 4);
-            });
-        }
-        return batch(0);
-    }
+        var noms = line.stations.join(',');
+        var ligneId = line.id;
+        var url = WORKER + '?method=batch&noms=' + encodeURIComponent(noms) + '&ligne=' + ligneId + '&nb=3';
 
-    function updateStation(index, data) {
-        var left = [], right = [];
-        if (data && data.listePassages) {
-            data.listePassages.forEach(function(p) {
-                var ln = (p.ligne||'').toUpperCase();
-                if (currentLine==='T1' && ln==='T2') return;
-                if (currentLine==='T2' && ln==='T1') return;
-                var t = parseInt(p.tempsAttente, 10);
-                if (isNaN(t)) return;
-                var d = (p.destination||'').toLowerCase();
-                if (d.indexOf('haut')>=0 || d.indexOf('chazal')>=0 || d.indexOf('hdc')>=0) {
-                    left.push(t);
+        logConn('info', 'TR/getListeTemps batch (' + line.stations.length + ' stations)…', 'dim');
+
+        return workerFetch(url).then(function(data) {
+            if (!data.ok) throw new Error(data.msg || 'Erreur batch');
+
+            // Build lookup: station name -> { left: [], right: [] }
+            var lookup = {};
+
+            // Process aller (sensAller=true) results
+            if (data.aller && data.aller.ok && data.aller.objets) {
+                data.aller.objets.forEach(function(lieu) {
+                    var nom = lieu.nomExact;
+                    if (!lookup[nom]) lookup[nom] = { left: [], right: [] };
+                    (lieu.listeTemps || []).forEach(function(t) {
+                        // sensAller=true means going towards the "aller" terminus (rightDir)
+                        lookup[nom].right.push(t.tempsEnMinute);
+                    });
+                });
+            }
+
+            // Process retour (sensAller=false) results
+            if (data.retour && data.retour.ok && data.retour.objets) {
+                data.retour.objets.forEach(function(lieu) {
+                    var nom = lieu.nomExact;
+                    if (!lookup[nom]) lookup[nom] = { left: [], right: [] };
+                    (lieu.listeTemps || []).forEach(function(t) {
+                        // sensAller=false means going towards the "retour" terminus (leftDir)
+                        lookup[nom].left.push(t.tempsEnMinute);
+                    });
+                });
+            }
+
+            // Update each station
+            var okCount = 0;
+            line.stations.forEach(function(name, i) {
+                var info = lookup[name];
+                if (info) {
+                    info.left.sort(function(a,b){return a-b;});
+                    info.right.sort(function(a,b){return a-b;});
+                    renderTimes('tl-'+i, 'dl-'+i, info.left);
+                    renderTimes('tr-'+i, 'dr-'+i, info.right);
+                    var n = $('sn-'+i);
+                    if (n) n.classList.toggle('highlight',
+                        !!(info.left.length && info.left[0]<=1) ||
+                        !!(info.right.length && info.right[0]<=1));
+                    if (info.left.length || info.right.length) okCount++;
                 } else {
-                    right.push(t);
+                    renderTimes('tl-'+i, 'dl-'+i, []);
+                    renderTimes('tr-'+i, 'dr-'+i, []);
                 }
             });
-        }
-        left.sort(function(a,b){return a-b;});
-        right.sort(function(a,b){return a-b;});
-        renderTimes('tl-'+index,'dl-'+index,left);
-        renderTimes('tr-'+index,'dr-'+index,right);
-        var n = $('sn-'+index);
-        if (n) n.classList.toggle('highlight', !!(left.length && left[0]<=1) || !!(right.length && right[0]<=1));
+
+            logConn('ok', 'Batch OK — ' + okCount + '/' + line.stations.length + ' stations avec passages', 'ok');
+            return okCount;
+        });
     }
 
     function renderTimes(tid, did, times) {
         var te = $(tid), de = $(did);
         if (!te || !de) return;
-        if (!times.length) { te.innerHTML='<span class="no-data">—</span>'; de.classList.remove('active'); return; }
+        if (!times.length) {
+            te.innerHTML='<span class="no-data">—</span>';
+            de.classList.remove('active');
+            return;
+        }
         te.innerHTML = times.slice(0,2).map(function(t) {
             var c = t<=1?'now':t<=5?'soon':'later';
             return '<span class="time-chip '+c+'">'+(t<=0?'⇢':t+"'")+'</span>';
@@ -771,17 +779,16 @@
         isLoading = true;
         var btn = $('refreshBtn');
         btn.classList.add('loading');
-        logConn('info', '<b>── Rafraîchissement '+currentLine+' ──</b>', '');
+        logConn('info', '── Rafraîchissement '+currentLine+' ──', '');
 
-        fetchAllTimes().then(function(results) {
-            var ok = results.filter(function(r){return r.ok;}).length;
+        fetchAllTimes().then(function(okCount) {
             var total = LINES[currentLine].stations.length;
-            logConn(ok>0?'ok':'warn', ok+'/'+total+' stations OK', ok>0?'ok':'warn');
             $('stationsList').style.display = 'block';
             $('stateContainer').style.display = 'none';
-            $('updateInfo').textContent = 'Mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — '+ok+'/'+total+' stations';
+            $('updateInfo').textContent = 'Mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' — '+okCount+'/'+total+' stations';
         }).catch(function(e) {
             logConn('err', 'Échec: '+e.message, 'err');
+            $('updateInfo').textContent = 'Erreur — '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
         }).finally(function() {
             isLoading = false;
             btn.classList.remove('loading');
@@ -789,77 +796,53 @@
     };
 
     function fetchTrafficInfo() {
-        callAPI('IT/getInfosTrafic', {}).then(function(result) {
-            if (!result || !Array.isArray(result)) return;
-            var alerts = result.filter(function(it) {
-                return (it.lignes||[]).some(function(l){return l==='T1'||l==='T2'||l==='101'||l==='102';});
-            });
-            var b = $('trafficBanner');
-            if (alerts.length) {
-                $('trafficText').innerHTML = alerts.map(function(a){return '<strong>'+(a.titre||'')+'</strong> '+(a.texte||'');}).join('<br>');
+        workerFetch(WORKER + '?method=etat').then(function(data) {
+            if (!data.ok || !data.objets) return;
+            logConn('ok', 'TR/getEtatLignes ✓', 'ok');
+            // Find T1/T2 line status
+            var lineId = LINES[currentLine].id;
+            var etat = data.objets.find(function(e) { return e.idLigne === lineId; });
+            if (etat && etat.etat > 0 && etat.etat !== 4) {
+                var b = $('trafficBanner');
+                var msgs = {1:'Perturbation mineure', 2:'Perturbation modérée', 3:'Perturbation majeure', 5:'Service interrompu', 6:'Service non assuré'};
+                $('trafficText').textContent = etat.numLignePublic + ' — ' + (msgs[etat.etat] || 'État: ' + etat.etat);
                 b.classList.add('show');
-            } else b.classList.remove('show');
+            }
         }).catch(function(e) { logConn('warn','Trafic: '+e.message,'warn'); });
     }
 
     function init() {
-        logConn('info', '<b>Démarrage v7</b> — api.js via reverse proxy Worker', '');
-        logConn('info', 'Proxy: cold-rain-f589.cedric-thomas6.workers.dev', 'dim');
+        logConn('info', '<b>Démarrage v14</b> — TR/getListeTemps via Worker', '');
+        logConn('info', 'Worker: ' + WORKER.replace('https://',''), 'dim');
 
-        if (typeof ginkoAPI === 'undefined') {
-            logConn('err', 'ginkoAPI NON CHARGÉ', 'err');
-            $('stateContainer').innerHTML =
-                '<div class="state-icon">❌</div>' +
-                '<div class="title">api.js non chargé</div>' +
-                '<div class="desc error">Le script api.js via le proxy n\'a pas pu être chargé.</div>';
-            return;
-        }
-        logConn('ok', 'ginkoAPI chargé ✓', 'ok');
-        
-        // Log where ginkoAPI thinks the server is
-        if (typeof ginkoServerURL !== 'undefined') {
-            logConn('info', 'ginkoServerURL = ' + ginkoServerURL, 'dim');
-        }
+        // Quick test
+        var testUrl = WORKER + '?method=temps&nom=' + encodeURIComponent('République') +
+                      '&ligne=101&sens=false&nb=3';
+        logConn('info', 'Test: TR/getListeTemps sur République…', 'dim');
 
-        logConn('info', 'Test: TA/getTempsAttente sur t_repu…', 'dim');
-        callAPI('TA/getTempsAttente', {idArret:'t_repu'}).then(function(data) {
-            var nb = data && data.listePassages ? data.listePassages.length : 0;
+        workerFetch(testUrl).then(function(data) {
+            if (!data.ok) throw new Error(data.msg);
+            var nb = 0;
+            if (data.objets) {
+                data.objets.forEach(function(l) { nb += (l.listeTemps||[]).length; });
+            }
             logConn('ok', '<b>API OK ✓</b> — '+nb+' passages à République', 'ok');
         }).catch(function(e) {
-            logConn('err', 'Test: ' + e.message, 'err');
+            logConn('err', 'Test échoué: '+e.message, 'err');
         }).then(function() {
             buildStations();
             refreshData();
             fetchTrafficInfo();
             if (refreshTimer) clearInterval(refreshTimer);
             refreshTimer = setInterval(refreshData, REFRESH_INTERVAL);
-            setInterval(fetchTrafficInfo, 180000);
+            setInterval(fetchTrafficInfo, 120000);
         });
     }
 
-    // Wait for ginkoAPI to be defined (api.js might load async)
-    var tries = 0;
-    function waitForAPI() {
-        if (typeof ginkoAPI !== 'undefined') {
-            init();
-        } else if (tries > 20) {
-            logConn('err', 'ginkoAPI introuvable après 10s', 'err');
-            $('stateContainer').innerHTML =
-                '<div class="state-icon">❌</div>' +
-                '<div class="title">api.js non chargé</div>' +
-                '<div class="desc error">Le script n\'a pas pu être chargé via le proxy Worker.</div>' +
-                '<button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:var(--text);cursor:pointer;font-size:14px;">↻ Réessayer</button>';
-        } else {
-            tries++;
-            logConn('info', 'Attente api.js… (' + tries + ')', 'dim');
-            setTimeout(waitForAPI, 500);
-        }
-    }
-
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', waitForAPI);
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        waitForAPI();
+        init();
     }
 })();
 </script>
