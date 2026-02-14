@@ -1,4 +1,4 @@
-var CACHE='ginko-v16';
+var CACHE='ginko-v17';
 var URLS=['./','./manifest.json'];
 
 self.addEventListener('install',function(e){
@@ -14,10 +14,17 @@ self.addEventListener('activate',function(e){
 });
 
 self.addEventListener('fetch',function(e){
-  // Network first for API, cache first for assets
-  if(e.request.url.includes('workers.dev')){
-    e.respondWith(fetch(e.request).catch(function(){return caches.match(e.request);}));
-  } else {
-    e.respondWith(caches.match(e.request).then(function(r){return r||fetch(e.request);}));
-  }
+  // Network first for everything (API + HTML), fallback to cache
+  e.respondWith(
+    fetch(e.request).then(function(r){
+      // Update cache with fresh response
+      if(r.ok){
+        var clone=r.clone();
+        caches.open(CACHE).then(function(c){c.put(e.request,clone);});
+      }
+      return r;
+    }).catch(function(){
+      return caches.match(e.request);
+    })
+  );
 });
