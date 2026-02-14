@@ -118,9 +118,12 @@
         .stations-wrap { padding:0 10px; }
         .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
 
+        .station-group { position:relative; }
+        .station-group:last-child .station-row::after { display:none; }
+
         .station-row {
             display:grid;
-            grid-template-columns:minmax(50px,1fr) 24px auto 24px minmax(50px,1fr);
+            grid-template-columns:1fr 24px 120px 24px 1fr;
             align-items:center;
             padding:0 12px;
             min-height:46px;
@@ -129,10 +132,9 @@
             transition:background .15s;
         }
         .station-row::after { content:''; position:absolute; bottom:0; left:46px; right:46px; height:1px; background:var(--border); }
-        .station-row:last-child::after { display:none; }
         .station-row:hover { background:rgba(255,255,255,.015); }
-        .station-row.nearest { background:rgba(0,224,158,.04); }
-        .station-row.nearest .station-name { color:var(--green); }
+        .station-group.nearest .station-row { background:rgba(0,224,158,.04); }
+        .station-group.nearest .station-name { color:var(--green); }
 
         /* ── Times ── */
         .times { display:flex; gap:3px; flex-wrap:wrap; align-items:center; }
@@ -163,8 +165,8 @@
         .track::before { content:''; position:absolute; top:0; bottom:0; left:50%; width:2px; transform:translateX(-50%); opacity:.2; }
         .track.left::before { background:var(--left); }
         .track.right::before { background:var(--right); }
-        .station-row:first-child .track::before { top:50%; }
-        .station-row:last-child .track::before { bottom:50%; }
+        .station-group:first-child .track::before { top:50%; }
+        .station-group:last-child .track::before { bottom:50%; }
         .dot { width:8px; height:8px; border-radius:50%; background:var(--card); border:2px solid; z-index:2; transition:all .4s cubic-bezier(.4,0,.2,1); }
         .dot.left { border-color:rgba(255,159,67,.35); }
         .dot.right { border-color:rgba(95,108,245,.35); }
@@ -182,9 +184,9 @@
             overflow:hidden;
             transition:max-height .35s cubic-bezier(.4,0,.2,1);
             background:var(--bg2);
-            border-top:1px solid var(--border);
+            border-top:0px solid var(--border);
         }
-        .detail-panel.open { max-height:260px; }
+        .detail-panel.open { max-height:260px; border-top-width:1px; }
         .detail-inner { padding:10px 14px 12px; }
         .detail-section { margin-bottom:8px; }
         .detail-label { font-size:.55rem; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; font-weight:600; }
@@ -255,12 +257,12 @@
 
         /* ── Responsive ── */
         @media(max-width:420px) {
-            .station-row { grid-template-columns:minmax(40px,1fr) 20px auto 20px minmax(40px,1fr); padding:0 8px; min-height:42px; }
+            .station-row { grid-template-columns:1fr 20px 100px 20px 1fr; padding:0 8px; min-height:42px; }
             .station-name { font-size:.66rem; }
             .time-chip { font-size:.62rem; padding:2px 5px; }
             .dir-tag { font-size:.48rem; }
         }
-        .station-row { animation:row-in .3s ease-out both; }
+        .station-group { animation:row-in .3s ease-out both; }
         @keyframes row-in { from{opacity:0;transform:translateY(5px);} to{opacity:1;transform:translateY(0);} }
     </style>
 </head>
@@ -455,13 +457,13 @@ function onGeoPos(pos){
         if(d<bestDist){bestDist=d;bestIdx=i;}
     });
     nearestIdx=bestIdx;
-    document.querySelectorAll('.station-row').forEach(function(r,i){
-        r.classList.toggle('nearest',i===bestIdx);
+    document.querySelectorAll('.station-group').forEach(function(g,i){
+        g.classList.toggle('nearest',i===bestIdx);
     });
     if(bestIdx>=0){
         logConn('ok','Station proche: '+line.stations[bestIdx]+' ('+Math.round(bestDist)+'m)','ok');
-        var row=document.querySelector('.station-row:nth-child('+(bestIdx+1)+')');
-        if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
+        var grp=document.querySelectorAll('.station-group')[bestIdx];
+        if(grp) grp.scrollIntoView({behavior:'smooth',block:'center'});
     }
 }
 function onGeoErr(e){ logConn('warn','Géoloc: '+e.message,'warn'); }
@@ -484,9 +486,13 @@ function buildStations(){
     c.innerHTML=''; openDetail=-1;
     line.stations.forEach(function(name,i){
         var fav=isFav(name);
+        // Wrapper group
+        var g=document.createElement('div');
+        g.className='station-group'+(i===nearestIdx?' nearest':'');
+        g.style.animationDelay=(i*12)+'ms';
+        // Station row
         var r=document.createElement('div');
-        r.className='station-row'+(i===nearestIdx?' nearest':'');
-        r.style.animationDelay=(i*12)+'ms';
+        r.className='station-row';
         r.onclick=function(e){if(e.target.closest('.detail-panel'))return;toggleDetail(i);};
         r.innerHTML=
             '<div class="times left" id="tl-'+i+'"><span class="no-data">—</span></div>'+
@@ -494,13 +500,14 @@ function buildStations(){
             '<div class="station-name" id="sn-'+i+'">'+name+'<span class="fav-star'+(fav?' on':'')+'">★</span></div>'+
             '<div class="track right"><div class="dot right" id="dr-'+i+'"></div></div>'+
             '<div class="times right" id="tr-'+i+'"><span class="no-data">—</span></div>';
-        c.appendChild(r);
-        // detail panel
+        g.appendChild(r);
+        // Detail panel
         var dp=document.createElement('div');
         dp.className='detail-panel';
         dp.id='dp-'+i;
         dp.innerHTML='<div class="detail-inner" id="di-'+i+'"></div>';
-        c.appendChild(dp);
+        g.appendChild(dp);
+        c.appendChild(g);
     });
 }
 
