@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0a0a0f">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Ginko Tram">
     <link rel="manifest" href="manifest.json">
@@ -49,17 +49,9 @@
             -webkit-font-smoothing:antialiased;
             overflow-x:hidden;
         }
-        body::before,body::after {
-            content:''; position:fixed; pointer-events:none; z-index:0;
-        }
-        body::before {
-            top:-30%; left:-20%; width:60%; height:60%;
-            background:radial-gradient(ellipse,rgba(95,108,245,0.05) 0%,transparent 70%);
-        }
-        body::after {
-            bottom:-20%; right:-20%; width:50%; height:50%;
-            background:radial-gradient(ellipse,rgba(255,159,67,0.03) 0%,transparent 70%);
-        }
+        body::before,body::after { content:''; position:fixed; pointer-events:none; z-index:0; }
+        body::before { top:-30%; left:-20%; width:60%; height:60%; background:radial-gradient(ellipse,rgba(95,108,245,0.05) 0%,transparent 70%); }
+        body::after { bottom:-20%; right:-20%; width:50%; height:50%; background:radial-gradient(ellipse,rgba(255,159,67,0.03) 0%,transparent 70%); }
         .app { position:relative; z-index:1; max-width:520px; margin:0 auto; padding-bottom:env(safe-area-inset-bottom,20px); }
 
         /* ── Header ── */
@@ -114,78 +106,85 @@
         .dir-tag.right { background:var(--right-dim); color:var(--right); }
         .dir-sep { flex:1; height:1px; background:var(--border); }
 
-        /* ── Stations ── */
+        /* ══════════════════════════════════════════
+           STATIONS - TABLE for guaranteed alignment
+           ══════════════════════════════════════════ */
         .stations-wrap { padding:0 10px; }
-        .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; position:relative; }
-        /* Track lines positioned by JS */
-        .track-line { position:absolute; top:23px; bottom:23px; width:2px; opacity:.2; z-index:1; pointer-events:none; }
-        .track-line.left { background:var(--left); }
-        .track-line.right { background:var(--right); }
+        .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+        .s-table { width:100%; border-collapse:collapse; }
+        .s-table td { padding:0; vertical-align:middle; }
 
-        .station-group { position:relative; }
-        .station-group:last-child .station-row::after { display:none; }
+        /* Station row */
+        .s-row { cursor:pointer; transition:background .15s; }
+        .s-row:hover { background:rgba(255,255,255,.015); }
+        .s-row.nearest { background:rgba(0,224,158,.04); }
+        .s-row td { border-bottom:1px solid var(--border); }
 
-        .station-row {
-            display:grid;
-            grid-template-columns:1fr 24px 120px 24px 1fr;
-            align-items:center;
-            padding:0 12px;
-            min-height:46px;
-            position:relative;
-            cursor:pointer;
-            transition:background .15s;
-        }
-        .station-row::after { content:''; position:absolute; bottom:0; left:46px; right:46px; height:1px; background:var(--border); }
-        .station-row:hover { background:rgba(255,255,255,.015); }
-        .station-group.nearest .station-row { background:rgba(0,224,158,.04); }
-        .station-group.nearest .station-name { color:var(--green); }
-
-        /* ── Times ── */
-        .times { display:flex; gap:3px; flex-wrap:wrap; align-items:center; }
-        .times.left { justify-content:flex-end; padding-right:5px; }
-        .times.right { justify-content:flex-start; padding-left:5px; }
-
+        /* ── Times cells ── */
+        .times { display:flex; gap:3px; flex-wrap:wrap; align-items:center; padding:6px 8px; }
+        .times.left { justify-content:flex-end; }
+        .times.right { justify-content:flex-start; }
         .time-chip {
-            font-family:'Space Mono',monospace;
-            font-size:.68rem;
-            font-weight:700;
-            padding:2px 6px;
-            border-radius:5px;
-            line-height:1.3;
-            white-space:nowrap;
-            position:relative;
+            font-family:'Space Mono',monospace; font-size:.68rem; font-weight:700;
+            padding:2px 6px; border-radius:5px; line-height:1.3; white-space:nowrap;
         }
         .time-chip.now { background:var(--green); color:var(--bg); }
         .time-chip.soon { background:rgba(255,179,71,.15); color:var(--amber); }
         .time-chip.later { background:rgba(255,255,255,.04); color:var(--text2); }
-        .time-chip .dest-hint { font-size:.48rem; font-weight:400; color:var(--text3); display:block; line-height:1; margin-top:0px; }
+        .time-chip .dest-hint { font-size:.48rem; font-weight:400; color:var(--text3); display:block; line-height:1; }
         .time-chip.now .dest-hint { color:rgba(0,0,0,.5); }
         .time-chip.soon .dest-hint { color:rgba(255,179,71,.4); }
-
         .no-data { font-size:.55rem; color:var(--text3); }
 
-        /* ── Track ── */
-        .track { position:relative; display:flex; align-items:center; justify-content:center; height:100%; min-height:46px; z-index:2; }
-        .dot { width:8px; height:8px; border-radius:50%; background:var(--card); border:2px solid; z-index:2; transition:all .4s cubic-bezier(.4,0,.2,1); }
+        /* ── Track cells (vertical line + dot) ── */
+        .td-track { width:24px; position:relative; }
+        .track {
+            position:relative; width:24px; height:46px;
+        }
+        .track::before {
+            content:''; position:absolute;
+            top:0; bottom:0; left:50%;
+            width:2px; transform:translateX(-50%);
+            opacity:.2;
+        }
+        .track.left::before { background:var(--left); }
+        .track.right::before { background:var(--right); }
+        /* Trim first/last */
+        .s-row.first-row .track::before { top:50%; }
+        .s-row.last-row .track::before { bottom:50%; }
+        .dot {
+            position:absolute; top:50%; left:50%;
+            transform:translate(-50%,-50%);
+            width:8px; height:8px; border-radius:50%;
+            background:var(--card); border:2px solid;
+            z-index:2; transition:all .4s cubic-bezier(.4,0,.2,1);
+        }
         .dot.left { border-color:rgba(255,159,67,.35); }
         .dot.right { border-color:rgba(95,108,245,.35); }
         .dot.active { width:13px; height:13px; background:var(--green); border-color:var(--green); box-shadow:0 0 12px var(--green-glow); }
 
-        /* ── Station name ── */
-        .station-name { text-align:center; font-size:.73rem; font-weight:500; padding:8px 3px; line-height:1.15; color:var(--text); transition:all .2s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        /* ── Station name cell ── */
+        .td-name { text-align:center; }
+        .station-name {
+            font-size:.73rem; font-weight:500;
+            padding:8px 4px; line-height:1.15;
+            color:var(--text); transition:all .2s;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            max-width:130px; display:inline-block;
+        }
         .station-name.highlight { color:var(--green); font-weight:700; }
+        .s-row.nearest .station-name { color:var(--green); }
         .station-name .fav-star { font-size:.55rem; margin-left:2px; color:var(--amber); opacity:0; transition:opacity .2s; }
-        .station-row:hover .fav-star,.station-name .fav-star.on { opacity:1; }
+        .s-row:hover .fav-star, .station-name .fav-star.on { opacity:1; }
 
-        /* ── Detail Panel ── */
+        /* ── Detail Panel row ── */
+        .detail-wrap td { padding:0; border-bottom:1px solid var(--border); }
         .detail-panel {
-            max-height:0;
-            overflow:hidden;
+            max-height:0; overflow:hidden;
             transition:max-height .35s cubic-bezier(.4,0,.2,1);
             background:var(--bg2);
-            border-top:0px solid var(--border);
         }
-        .detail-panel.open { max-height:260px; border-top-width:1px; }
+        .detail-panel.open { max-height:260px; }
         .detail-inner { padding:10px 14px 12px; }
         .detail-section { margin-bottom:8px; }
         .detail-label { font-size:.55rem; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; font-weight:600; }
@@ -211,7 +210,6 @@
         .loader { width:80px; height:2px; background:var(--card2); border-radius:2px; margin:16px auto 0; overflow:hidden; }
         .loader::after { content:''; display:block; width:35%; height:100%; background:var(--green); border-radius:2px; animation:load-slide 1.4s ease-in-out infinite; }
         @keyframes load-slide { 0%{transform:translateX(-100%);} 100%{transform:translateX(380%);} }
-
         .no-service { text-align:center; padding:20px 16px 0; display:none; }
         .no-service.show { display:block; }
         .no-service p { font-size:.72rem; color:var(--text2); line-height:1.5; }
@@ -256,12 +254,12 @@
 
         /* ── Responsive ── */
         @media(max-width:420px) {
-            .station-row { grid-template-columns:1fr 20px 100px 20px 1fr; padding:0 8px; min-height:42px; }
-            .station-name { font-size:.66rem; }
+            .times { padding:4px 4px; }
+            .station-name { font-size:.66rem; max-width:100px; }
             .time-chip { font-size:.62rem; padding:2px 5px; }
             .dir-tag { font-size:.48rem; }
         }
-        .station-group { animation:row-in .3s ease-out both; }
+        .s-row { animation:row-in .3s ease-out both; }
         @keyframes row-in { from{opacity:0;transform:translateY(5px);} to{opacity:1;transform:translateY(0);} }
     </style>
 </head>
@@ -270,10 +268,7 @@
     <div class="header">
         <div class="brand">
             <div class="brand-icon">🚊</div>
-            <div>
-                <h1>Ginko Tram</h1>
-                <div class="sub">Besançon — temps réel</div>
-            </div>
+            <div><h1>Ginko Tram</h1><div class="sub">Besançon — temps réel</div></div>
         </div>
         <div class="header-right">
             <button class="geo-btn" id="geoBtn" onclick="toggleGeo()" title="Me localiser">📍</button>
@@ -308,12 +303,12 @@
     </div>
 
     <div class="stations-wrap">
-        <div class="stations" id="stationsList" style="display:none;"></div>
+        <div class="stations" id="stationsWrap" style="display:none;">
+            <table class="s-table"><tbody id="stationsBody"></tbody></table>
+        </div>
     </div>
 
-    <div class="no-service" id="noService">
-        <p>Aucun tram en circulation.<br>Service : ~5h–0h30 (dim 5h30–23h30)</p>
-    </div>
+    <div class="no-service" id="noService"><p>Aucun tram en circulation.<br>Service : ~5h–0h30 (dim 5h30–23h30)</p></div>
 
     <div class="controls">
         <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><span class="ricon">↻</span><span class="spin"></span> Actualiser</button>
@@ -325,12 +320,11 @@
         <div class="legend-item"><div class="legend-dot o"></div>← Ouest</div>
         <div class="legend-item"><div class="legend-dot b"></div><span id="legendRight">Est →</span></div>
     </div>
+    <div class="credits">Données <a href="https://opendata.besancon.fr" target="_blank">Ginko / Besançon Mobilités</a></div>
 
-    <div class="credits">Données <a href="https://api.ginko.voyage" target="_blank">Open Data Ginko</a> · ODbL</div>
-
-    <div id="connLog" class="conn-log">
+    <div class="conn-log" id="connLog">
         <div class="conn-log-inner">
-            <div class="conn-title">Diagnostic</div>
+            <div class="conn-title">Journal de connexion</div>
             <div id="connEntries"></div>
         </div>
     </div>
@@ -343,39 +337,18 @@
 var WORKER='https://cold-rain-f589.cedric-thomas6.workers.dev';
 var REFRESH=30000, TIMEOUT=15000;
 
-/* ── Station coords (lat,lng) for geolocation ── */
 var COORDS={
-'Hauts du Chazal':[47.2270,5.9685],
-'UFR Santé':[47.2282,5.9720],
-'Maison des Familles':[47.2299,5.9773],
-'CHU Minjoz':[47.2318,5.9800],
-'Île-de-France':[47.2330,5.9850],
-'Époisses':[47.2335,5.9895],
-'Allende':[47.2340,5.9933],
-'Micropolis':[47.2348,5.9972],
-'Malcombe':[47.2358,6.0018],
-'Rosemont':[47.2370,6.0058],
-'Brulard':[47.2382,6.0092],
-'Polygone':[47.2387,6.0128],
-'Chamars':[47.2380,6.0168],
-'Canot':[47.2395,6.0170],
-'Battant':[47.2412,6.0175],
-'Révolution':[47.2400,6.0210],
-'République':[47.2385,6.0253],
-'Parc Micaud':[47.2402,6.0280],
-'Fontaine Argent':[47.2428,6.0280],
-'Tristan Bernard':[47.2450,6.0268],
-'Brûlefoin':[47.2468,6.0290],
-'Les Vaîtes':[47.2490,6.0320],
-'Schweitzer':[47.2508,6.0370],
-'Croix de Palente':[47.2520,6.0405],
-'Lilas':[47.2530,6.0450],
-'Orchamps':[47.2540,6.0500],
-'Fort Benoît':[47.2548,6.0545],
-'Marnières':[47.2555,6.0580],
-'Chalezeule':[47.2560,6.0620],
-'Flore':[47.2438,6.0240],
-'Gare Viotte':[47.2468,6.0198]
+'Hauts du Chazal':[47.2270,5.9685],'UFR Santé':[47.2282,5.9720],'Maison des Familles':[47.2299,5.9773],
+'CHU Minjoz':[47.2318,5.9800],'Île-de-France':[47.2330,5.9850],'Époisses':[47.2335,5.9895],
+'Allende':[47.2340,5.9933],'Micropolis':[47.2348,5.9972],'Malcombe':[47.2358,6.0018],
+'Rosemont':[47.2370,6.0058],'Brulard':[47.2382,6.0092],'Polygone':[47.2387,6.0128],
+'Chamars':[47.2380,6.0168],'Canot':[47.2395,6.0170],'Battant':[47.2412,6.0175],
+'Révolution':[47.2400,6.0210],'République':[47.2385,6.0253],'Parc Micaud':[47.2402,6.0280],
+'Fontaine Argent':[47.2428,6.0280],'Tristan Bernard':[47.2450,6.0268],'Brûlefoin':[47.2468,6.0290],
+'Les Vaîtes':[47.2490,6.0320],'Schweitzer':[47.2508,6.0370],'Croix de Palente':[47.2520,6.0405],
+'Lilas':[47.2530,6.0450],'Orchamps':[47.2540,6.0500],'Fort Benoît':[47.2548,6.0545],
+'Marnières':[47.2555,6.0580],'Chalezeule':[47.2560,6.0620],
+'Flore':[47.2438,6.0240],'Gare Viotte':[47.2468,6.0198]
 };
 
 var LINES={
@@ -386,308 +359,221 @@ var LINES={
 };
 
 var currentLine='T1', refreshTimer=null, isLoading=false, logOpen=false;
-var stationData={};  // name -> {left:[{min,dest,fiable,charge}], right:[...]}
-var openDetail=-1, nearestIdx=-1, geoActive=false, geoWatchId=null;
+var stationData={}, openDetail=-1, nearestIdx=-1, geoActive=false, geoWatchId=null;
 var $=function(id){return document.getElementById(id);};
 
 /* ── Favorites ── */
-function getFavs(){ try{return JSON.parse(localStorage.getItem('ginko-favs'))||[];}catch(e){return [];} }
-function setFavs(f){ localStorage.setItem('ginko-favs',JSON.stringify(f)); }
-function isFav(name){ return getFavs().indexOf(name)>=0; }
+function getFavs(){try{return JSON.parse(localStorage.getItem('ginko-favs'))||[];}catch(e){return [];}}
+function setFavs(f){localStorage.setItem('ginko-favs',JSON.stringify(f));}
+function isFav(name){return getFavs().indexOf(name)>=0;}
 function toggleFav(name){
-    var f=getFavs(), i=f.indexOf(name);
-    if(i>=0) f.splice(i,1); else f.push(name);
-    setFavs(f);
-    renderFavBar();
-    buildStations();
+    var f=getFavs(),i=f.indexOf(name);
+    if(i>=0)f.splice(i,1); else f.push(name);
+    setFavs(f); renderFavBar(); buildStations();
 }
 function renderFavBar(){
-    var f=getFavs();
-    var bar=$('favBar'), chips=$('favChips');
-    if(!f.length){ bar.classList.remove('show'); return; }
-    bar.classList.add('show');
-    chips.innerHTML='';
+    var f=getFavs(),bar=$('favBar'),chips=$('favChips');
+    if(!f.length){bar.classList.remove('show');return;}
+    bar.classList.add('show'); chips.innerHTML='';
     f.forEach(function(name){
-        var d=stationData[name.toLowerCase()];
-        var times=[];
-        if(d){
-            d.left.concat(d.right).forEach(function(t){times.push(t.min);});
-            times.sort(function(a,b){return a-b;});
-        }
-        var chip=document.createElement('div');
-        chip.className='fav-chip';
-        chip.onclick=function(){ scrollToStation(name); };
-        var tStr=times.length? times.slice(0,2).map(function(t){return t<=0?'⇢':t+"'";}).join(' '):'—';
+        var d=stationData[name.toLowerCase()],times=[];
+        if(d){d.left.concat(d.right).forEach(function(t){times.push(t.min);});times.sort(function(a,b){return a-b;});}
+        var chip=document.createElement('div');chip.className='fav-chip';
+        chip.onclick=function(){scrollToStation(name);};
+        var tStr=times.length?times.slice(0,2).map(function(t){return t<=0?'⇢':t+"'";}).join(' '):'—';
         chip.innerHTML=name+'<span class="fc-times'+(times.length?'':' empty')+'">'+tStr+'</span>';
         chips.appendChild(chip);
     });
 }
 function scrollToStation(name){
-    var line=LINES[currentLine];
-    var idx=line.stations.indexOf(name);
-    if(idx<0) return;
-    var row=document.querySelector('.station-row:nth-child('+(idx+1)+')');
-    if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
+    var line=LINES[currentLine],idx=line.stations.indexOf(name);
+    if(idx<0)return;
+    var row=$('sr-'+idx);
+    if(row)row.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 /* ── Geolocation ── */
 function toggleGeo(){
-    if(geoActive){ stopGeo(); return; }
-    if(!navigator.geolocation){ logConn('warn','Géoloc non disponible','warn'); return; }
-    geoActive=true;
-    $('geoBtn').classList.add('active');
+    if(geoActive){stopGeo();return;}
+    if(!navigator.geolocation){logConn('warn','Géoloc non disponible','warn');return;}
+    geoActive=true; $('geoBtn').classList.add('active');
     logConn('info','Géolocalisation activée…','dim');
     geoWatchId=navigator.geolocation.watchPosition(onGeoPos,onGeoErr,{enableHighAccuracy:true,maximumAge:15000,timeout:10000});
 }
 window.toggleGeo=toggleGeo;
 function stopGeo(){
-    geoActive=false;
-    $('geoBtn').classList.remove('active');
+    geoActive=false; $('geoBtn').classList.remove('active');
     if(geoWatchId!==null){navigator.geolocation.clearWatch(geoWatchId);geoWatchId=null;}
     nearestIdx=-1;
-    document.querySelectorAll('.station-row.nearest').forEach(function(r){r.classList.remove('nearest');});
+    document.querySelectorAll('.s-row.nearest').forEach(function(r){r.classList.remove('nearest');});
 }
 function onGeoPos(pos){
     var lat=pos.coords.latitude,lng=pos.coords.longitude;
-    var line=LINES[currentLine], bestDist=Infinity, bestIdx=-1;
+    var line=LINES[currentLine],bestDist=Infinity,bestIdx=-1;
     line.stations.forEach(function(name,i){
-        var c=COORDS[name]; if(!c)return;
+        var c=COORDS[name];if(!c)return;
         var d=haversine(lat,lng,c[0],c[1]);
         if(d<bestDist){bestDist=d;bestIdx=i;}
     });
     nearestIdx=bestIdx;
-    document.querySelectorAll('.station-group').forEach(function(g,i){
-        g.classList.toggle('nearest',i===bestIdx);
-    });
+    document.querySelectorAll('.s-row').forEach(function(r,i){r.classList.toggle('nearest',i===bestIdx);});
     if(bestIdx>=0){
         logConn('ok','Station proche: '+line.stations[bestIdx]+' ('+Math.round(bestDist)+'m)','ok');
-        var grp=document.querySelectorAll('.station-group')[bestIdx];
-        if(grp) grp.scrollIntoView({behavior:'smooth',block:'center'});
+        var row=$('sr-'+bestIdx);
+        if(row)row.scrollIntoView({behavior:'smooth',block:'center'});
     }
 }
-function onGeoErr(e){ logConn('warn','Géoloc: '+e.message,'warn'); }
+function onGeoErr(e){logConn('warn','Géoloc: '+e.message,'warn');}
 function haversine(lat1,lon1,lat2,lon2){
-    var R=6371000,r=Math.PI/180;
-    var dLat=(lat2-lat1)*r,dLon=(lon2-lon1)*r;
+    var R=6371000,r=Math.PI/180,dLat=(lat2-lat1)*r,dLon=(lon2-lon1)*r;
     var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)*Math.sin(dLon/2);
     return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
 /* ── Log ── */
 window.toggleLog=function(){logOpen=!logOpen;$('connLog').classList.toggle('open',logOpen);};
-function logConn(s,m,c){var e=$('connEntries');if(!e)return;var t=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});var i=s==='ok'?'✅':s==='err'?'❌':s==='warn'?'⚠️':'ℹ️';var d=document.createElement('div');d.className='conn-entry';d.innerHTML='<span class="conn-time">'+t+'</span><span class="conn-status">'+i+'</span><span class="conn-msg '+(c||'')+'">'+m+'</span>';e.appendChild(d);e.parentElement.scrollTop=e.parentElement.scrollHeight;}
-
+function logConn(s,m,c){var e=$('connEntries');if(!e)return;var t=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});var ic=s==='ok'?'✅':s==='err'?'❌':s==='warn'?'⚠️':'ℹ️';var d=document.createElement('div');d.className='conn-entry';d.innerHTML='<span class="conn-time">'+t+'</span><span class="conn-status">'+ic+'</span><span class="conn-msg '+(c||'')+'">'+m+'</span>';e.appendChild(d);e.parentElement.scrollTop=e.parentElement.scrollHeight;}
 function workerFetch(url){return new Promise(function(ok,ko){var t=setTimeout(function(){ko(new Error('Timeout'));},TIMEOUT);fetch(url).then(function(r){clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(ok).catch(function(e){clearTimeout(t);ko(e);});});}
 
-/* ── Build station rows ── */
+/* ══════════════════════════════════════════
+   BUILD STATIONS (TABLE rows)
+   ══════════════════════════════════════════ */
 function buildStations(){
-    var line=LINES[currentLine], c=$('stationsList');
-    c.innerHTML=''; openDetail=-1;
-    // Add track line elements
-    var tlL=document.createElement('div');tlL.className='track-line left';tlL.id='trackLineL';c.appendChild(tlL);
-    var tlR=document.createElement('div');tlR.className='track-line right';tlR.id='trackLineR';c.appendChild(tlR);
-
+    var line=LINES[currentLine],body=$('stationsBody'),len=line.stations.length;
+    body.innerHTML=''; openDetail=-1;
     line.stations.forEach(function(name,i){
         var fav=isFav(name);
-        // Wrapper group
-        var g=document.createElement('div');
-        g.className='station-group'+(i===nearestIdx?' nearest':'');
-        g.style.animationDelay=(i*12)+'ms';
-        // Station row
-        var r=document.createElement('div');
-        r.className='station-row';
-        r.onclick=function(e){if(e.target.closest('.detail-panel'))return;toggleDetail(i);};
-        r.innerHTML=
-            '<div class="times left" id="tl-'+i+'"><span class="no-data">—</span></div>'+
-            '<div class="track left"><div class="dot left" id="dl-'+i+'"></div></div>'+
-            '<div class="station-name" id="sn-'+i+'">'+name+'<span class="fav-star'+(fav?' on':'')+'">★</span></div>'+
-            '<div class="track right"><div class="dot right" id="dr-'+i+'"></div></div>'+
-            '<div class="times right" id="tr-'+i+'"><span class="no-data">—</span></div>';
-        g.appendChild(r);
-        // Detail panel
-        var dp=document.createElement('div');
-        dp.className='detail-panel';
-        dp.id='dp-'+i;
-        dp.innerHTML='<div class="detail-inner" id="di-'+i+'"></div>';
-        g.appendChild(dp);
-        c.appendChild(g);
+        var cls='s-row';
+        if(i===0) cls+=' first-row';
+        if(i===len-1) cls+=' last-row';
+        if(i===nearestIdx) cls+=' nearest';
+        var tr=document.createElement('tr');
+        tr.className=cls; tr.id='sr-'+i;
+        tr.style.animationDelay=(i*12)+'ms';
+        tr.onclick=function(e){if(e.target.closest('.detail-panel'))return;toggleDetail(i);};
+        tr.innerHTML=
+            '<td><div class="times left" id="tl-'+i+'"><span class="no-data">—</span></div></td>'+
+            '<td class="td-track"><div class="track left"><div class="dot left" id="dl-'+i+'"></div></div></td>'+
+            '<td class="td-name"><div class="station-name" id="sn-'+i+'">'+name+'<span class="fav-star'+(fav?' on':'')+'">★</span></div></td>'+
+            '<td class="td-track"><div class="track right"><div class="dot right" id="dr-'+i+'"></div></div></td>'+
+            '<td><div class="times right" id="tr-'+i+'"><span class="no-data">—</span></div></td>';
+        body.appendChild(tr);
+        // Detail row
+        var dtr=document.createElement('tr');
+        dtr.className='detail-wrap';
+        dtr.innerHTML='<td colspan="5"><div class="detail-panel" id="dp-'+i+'"><div class="detail-inner" id="di-'+i+'"></div></div></td>';
+        body.appendChild(dtr);
     });
-    requestAnimationFrame(positionTrackLines);
-}
-
-function positionTrackLines(){
-    var c=$('stationsList');
-    var dlEl=document.getElementById('dl-0');
-    var drEl=document.getElementById('dr-0');
-    if(!c||!dlEl||!drEl)return;
-    var cRect=c.getBoundingClientRect();
-    var lRect=dlEl.getBoundingClientRect();
-    var rRect=drEl.getBoundingClientRect();
-    var lx=lRect.left+lRect.width/2-cRect.left;
-    var rx=rRect.left+rRect.width/2-cRect.left;
-    var tlL=document.getElementById('trackLineL');
-    var tlR=document.getElementById('trackLineR');
-    if(tlL)tlL.style.left=(lx-1)+'px';
-    if(tlR)tlR.style.left=(rx-1)+'px';
 }
 
 function toggleDetail(idx){
-    var line=LINES[currentLine];
-    // close previous
-    if(openDetail>=0 && openDetail!==idx){
-        var prev=$('dp-'+openDetail);
-        if(prev) prev.classList.remove('open');
-    }
-    var panel=$('dp-'+idx);
-    if(!panel)return;
+    if(openDetail>=0&&openDetail!==idx){var prev=$('dp-'+openDetail);if(prev)prev.classList.remove('open');}
+    var panel=$('dp-'+idx);if(!panel)return;
     var isOpen=panel.classList.contains('open');
     panel.classList.toggle('open');
     openDetail=isOpen?-1:idx;
-    if(!isOpen) renderDetail(idx);
+    if(!isOpen)renderDetail(idx);
 }
 
 function renderDetail(idx){
-    var line=LINES[currentLine], name=line.stations[idx];
-    var d=stationData[name.toLowerCase()];
-    var inner=$('di-'+idx);
-    if(!inner)return;
-    var fav=isFav(name);
-    var html='';
-
-    // Left direction
+    var line=LINES[currentLine],name=line.stations[idx],d=stationData[name.toLowerCase()];
+    var inner=$('di-'+idx);if(!inner)return;
+    var fav=isFav(name),html='';
     html+='<div class="detail-section"><div class="detail-label">← '+line.leftDir+'</div>';
-    if(d && d.left.length){
-        d.left.forEach(function(t){
-            var cls=t.min<=1?'now':t.min<=5?'soon':'later';
-            html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
-            html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
-            if(t.charge>=0){
-                var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';
-                var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';
-                html+='<span class="dr-badge '+cc+'">'+cl+'</span>';
-            }
-            html+='</div>';
-        });
-    } else { html+='<div class="detail-row"><span class="no-data">Aucun passage prévu</span></div>'; }
+    if(d&&d.left.length){d.left.forEach(function(t){
+        var cls=t.min<=1?'now':t.min<=5?'soon':'later';
+        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+        html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
+        if(t.charge>=0){var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';html+='<span class="dr-badge '+cc+'">'+cl+'</span>';}
+        html+='</div>';
+    });}else{html+='<div class="detail-row"><span class="no-data">Aucun passage prévu</span></div>';}
     html+='</div>';
-
-    // Right direction
     html+='<div class="detail-section"><div class="detail-label">'+line.rightDir+' →</div>';
-    if(d && d.right.length){
-        d.right.forEach(function(t){
-            var cls=t.min<=1?'now':t.min<=5?'soon':'later';
-            html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
-            html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
-            if(t.charge>=0){
-                var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';
-                var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';
-                html+='<span class="dr-badge '+cc+'">'+cl+'</span>';
-            }
-            html+='</div>';
-        });
-    } else { html+='<div class="detail-row"><span class="no-data">Aucun passage prévu</span></div>'; }
+    if(d&&d.right.length){d.right.forEach(function(t){
+        var cls=t.min<=1?'now':t.min<=5?'soon':'later';
+        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+        html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
+        if(t.charge>=0){var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';html+='<span class="dr-badge '+cc+'">'+cl+'</span>';}
+        html+='</div>';
+    });}else{html+='<div class="detail-row"><span class="no-data">Aucun passage prévu</span></div>';}
     html+='</div>';
-
     html+='<div class="detail-actions"><button class="'+(fav?'faved':'')+'" onclick="event.stopPropagation();toggleFav(\''+name.replace(/'/g,"\\'")+'\')">'+(fav?'★ Retirer des favoris':'☆ Ajouter aux favoris')+'</button></div>';
-
     inner.innerHTML=html;
 }
 window.toggleFav=toggleFav;
 
-/* ── Fetch data ── */
+/* ── Fetch ── */
 function fetchAllTimes(){
-    var line=LINES[currentLine], noms=line.stations.join(',');
+    var line=LINES[currentLine],noms=line.stations.join(',');
     var url=WORKER+'?method=batch&noms='+encodeURIComponent(noms)+'&ligne='+line.id+'&nb=3';
     logConn('info','Batch '+currentLine+' ('+line.stations.length+' stations)…','dim');
-
     return workerFetch(url).then(function(data){
         if(!data.ok)throw new Error(data.msg||'Erreur');
         stationData={};
-
         function processDir(dir,side){
             if(!dir||!dir.ok||!dir.objets)return;
             dir.objets.forEach(function(lieu){
                 var key=lieu.nomExact.toLowerCase();
                 if(!stationData[key])stationData[key]={left:[],right:[]};
                 (lieu.listeTemps||[]).forEach(function(t){
-                    stationData[key][side].push({
-                        min:t.tempsEnMinute,
-                        dest:t.destination||'?',
-                        fiable:t.fiable!==false,
-                        charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1
-                    });
+                    stationData[key][side].push({min:t.tempsEnMinute,dest:t.destination||'?',fiable:t.fiable!==false,charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1});
                 });
             });
         }
         processDir(data.aller,'right');
         processDir(data.retour,'left');
-
         var okCount=0;
         line.stations.forEach(function(name,i){
             var d=stationData[name.toLowerCase()];
-            if(d && (d.left.length||d.right.length)){
+            if(d&&(d.left.length||d.right.length)){
                 d.left.sort(function(a,b){return a.min-b.min;});
                 d.right.sort(function(a,b){return a.min-b.min;});
-                renderTimes('tl-'+i,'dl-'+i,d.left,'left');
-                renderTimes('tr-'+i,'dr-'+i,d.right,'right');
+                renderTimes('tl-'+i,'dl-'+i,d.left);
+                renderTimes('tr-'+i,'dr-'+i,d.right);
                 var n=$('sn-'+i);
-                if(n)n.classList.toggle('highlight',
-                    !!(d.left.length&&d.left[0].min<=1)||!!(d.right.length&&d.right[0].min<=1));
+                if(n)n.classList.toggle('highlight',!!(d.left.length&&d.left[0].min<=1)||!!(d.right.length&&d.right[0].min<=1));
                 okCount++;
-            } else {
-                renderTimes('tl-'+i,'dl-'+i,[],'left');
-                renderTimes('tr-'+i,'dr-'+i,[],'right');
-            }
-            // refresh open detail
-            if(openDetail===i) renderDetail(i);
+            }else{renderTimes('tl-'+i,'dl-'+i,[]);renderTimes('tr-'+i,'dr-'+i,[]);}
+            if(openDetail===i)renderDetail(i);
         });
-
         renderFavBar();
         logConn('ok',okCount+'/'+line.stations.length+' stations','ok');
         return okCount;
     });
 }
-
-function renderTimes(tid,did,times,side){
+function renderTimes(tid,did,times){
     var te=$(tid),de=$(did);if(!te||!de)return;
     if(!times.length){te.innerHTML='<span class="no-data">—</span>';de.classList.remove('active');return;}
     te.innerHTML=times.slice(0,2).map(function(t){
         var c=t.min<=1?'now':t.min<=5?'soon':'later';
         var label=t.min<=0?'⇢':t.min+"'";
-        // Short destination
-        var shortDest=t.dest.length>12?t.dest.substring(0,11)+'…':t.dest;
-        return '<span class="time-chip '+c+'">'+label+'<span class="dest-hint">'+shortDest+'</span></span>';
+        var sd=t.dest.length>12?t.dest.substring(0,11)+'…':t.dest;
+        return '<span class="time-chip '+c+'">'+label+'<span class="dest-hint">'+sd+'</span></span>';
     }).join('');
     de.classList.toggle('active',times[0].min<=1);
 }
 
-/* ── Countdown timer (update every 10s) ── */
+/* ── Countdown ── */
 var countdownTimer=null;
 function startCountdown(){
     if(countdownTimer)clearInterval(countdownTimer);
     countdownTimer=setInterval(function(){
         var line=LINES[currentLine];
-        line.stations.forEach(function(name,i){
-            var d=stationData[name.toLowerCase()];
-            if(!d)return;
-            // Decrement displayed times
+        line.stations.forEach(function(name){
+            var d=stationData[name.toLowerCase()];if(!d)return;
             d.left.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
             d.right.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
         });
-        // Re-render times without API call
         line.stations.forEach(function(name,i){
             var d=stationData[name.toLowerCase()];
-            if(d && (d.left.length||d.right.length)){
-                renderTimes('tl-'+i,'dl-'+i,d.left,'left');
-                renderTimes('tr-'+i,'dr-'+i,d.right,'right');
-            }
+            if(d&&(d.left.length||d.right.length)){renderTimes('tl-'+i,'dl-'+i,d.left);renderTimes('tr-'+i,'dr-'+i,d.right);}
         });
     },10000);
 }
 
 /* ── Line switch ── */
 window.selectLine=function(line,btn){
-    if(line===currentLine&&$('stationsList').childNodes.length>0)return;
+    if(line===currentLine&&$('stationsBody').childNodes.length>0)return;
     currentLine=line;
     document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
     btn.classList.add('active');
@@ -696,23 +582,20 @@ window.selectLine=function(line,btn){
     $('dirRight').textContent=info.rightDir+' →';
     $('legendRight').textContent=info.rightDir+' →';
     $('trafficBanner').classList.remove('show');
-    buildStations(); refreshData(); fetchTrafficInfo();
-    if(geoActive && geoWatchId!==null){
-        navigator.geolocation.getCurrentPosition(onGeoPos,function(){},{maximumAge:15000});
-    }
+    buildStations();refreshData();fetchTrafficInfo();
+    if(geoActive&&geoWatchId!==null){navigator.geolocation.getCurrentPosition(onGeoPos,function(){},{maximumAge:15000});}
 };
 
 window.refreshData=function(){
-    if(isLoading)return; isLoading=true;
+    if(isLoading)return;isLoading=true;
     $('refreshBtn').classList.add('loading');
     fetchAllTimes().then(function(ok){
-        $('stationsList').style.display='block';
+        $('stationsWrap').style.display='block';
         $('stateContainer').style.display='none';
         $('noService').classList.toggle('show',ok===0);
         $('liveDot').classList.toggle('offline',ok===0);
         $('updateInfo').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
         startCountdown();
-        requestAnimationFrame(positionTrackLines);
     }).catch(function(e){
         logConn('err',e.message,'err');
         $('updateInfo').textContent='Erreur';
@@ -729,21 +612,20 @@ function fetchTrafficInfo(){
             var msgs={1:'Perturbation mineure',2:'Perturbation modérée',3:'Perturbation majeure',5:'Service interrompu',6:'Service non assuré'};
             $('trafficText').innerHTML='<strong>'+(etat.numLignePublic||currentLine)+'</strong> — '+(msgs[etat.etat]||'État '+etat.etat);
             $('trafficBanner').classList.add('show');
-        } else { $('trafficBanner').classList.remove('show'); }
+        }else{$('trafficBanner').classList.remove('show');}
     }).catch(function(){});
 }
 
 function init(){
-    logConn('info','<b>v16</b> — TR/getListeTemps + favoris + géoloc','');
+    logConn('info','<b>v17</b> — TABLE layout + TR/getListeTemps','');
     renderFavBar();
-    window.addEventListener('resize',function(){requestAnimationFrame(positionTrackLines);});
     var testUrl=WORKER+'?method=temps&nom='+encodeURIComponent('République')+'&ligne=101&sens=false&nb=3';
     workerFetch(testUrl).then(function(data){
         if(!data.ok)throw new Error(data.msg);
-        var nb=0; if(data.objets)data.objets.forEach(function(l){nb+=(l.listeTemps||[]).length;});
+        var nb=0;if(data.objets)data.objets.forEach(function(l){nb+=(l.listeTemps||[]).length;});
         logConn('ok','API OK — '+nb+' passages test','ok');
     }).catch(function(e){logConn('err',e.message,'err');}).then(function(){
-        buildStations(); refreshData(); fetchTrafficInfo();
+        buildStations();refreshData();fetchTrafficInfo();
         if(refreshTimer)clearInterval(refreshTimer);
         refreshTimer=setInterval(refreshData,REFRESH);
         setInterval(fetchTrafficInfo,120000);
@@ -753,10 +635,7 @@ function init(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
 else init();
 
-// PWA Service Worker
-if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js').catch(function(){});
-}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(function(){});}
 })();
 </script>
 </body>
