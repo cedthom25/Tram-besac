@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Ginko Tram — Besançon temps réel</title>
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ginko Tram">
+    <link rel="manifest" href="manifest.json">
+    <title>Ginko Tram — Besançon</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -13,983 +18,716 @@
             --card: #16161f;
             --card2: #1c1c28;
             --border: rgba(255,255,255,0.05);
+            --border2: rgba(255,255,255,0.08);
             --text: #f0f0f5;
-            --text2: rgba(255,255,255,0.4);
+            --text2: rgba(255,255,255,0.45);
             --text3: rgba(255,255,255,0.2);
+            --t1: #00A5C2;
+            --t1-dim: rgba(0,165,194,0.12);
+            --t2: #006D78;
+            --t2-dim: rgba(0,109,120,0.15);
             --left: #ff9f43;
             --left-dim: rgba(255,159,67,0.12);
-            --left-glow: rgba(255,159,67,0.4);
             --right: #5f6cf5;
             --right-dim: rgba(95,108,245,0.12);
-            --right-glow: rgba(95,108,245,0.4);
             --green: #00e09e;
-            --green-dim: rgba(0,224,158,0.1);
+            --green-dim: rgba(0,224,158,0.08);
             --green-glow: rgba(0,224,158,0.35);
             --red: #ff6b6b;
-            --red-dim: rgba(255,107,107,0.1);
+            --red-dim: rgba(255,107,107,0.08);
+            --amber: #ffb347;
             --radius: 14px;
             --radius-sm: 8px;
         }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        html { 
-            background: var(--bg);
-            min-height: 100%;
-        }
-
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html { background:var(--bg); }
         body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100dvh;
-            -webkit-font-smoothing: antialiased;
-            overflow-x: hidden;
+            font-family:'Outfit',system-ui,sans-serif;
+            background:var(--bg);
+            color:var(--text);
+            min-height:100dvh;
+            -webkit-font-smoothing:antialiased;
+            overflow-x:hidden;
         }
-
-        /* ── Ambient background ── */
+        body::before,body::after {
+            content:''; position:fixed; pointer-events:none; z-index:0;
+        }
         body::before {
-            content: '';
-            position: fixed;
-            top: -30%;
-            left: -20%;
-            width: 60%;
-            height: 60%;
-            background: radial-gradient(ellipse, rgba(95,108,245,0.06) 0%, transparent 70%);
-            pointer-events: none;
-            z-index: 0;
+            top:-30%; left:-20%; width:60%; height:60%;
+            background:radial-gradient(ellipse,rgba(95,108,245,0.05) 0%,transparent 70%);
         }
         body::after {
-            content: '';
-            position: fixed;
-            bottom: -20%;
-            right: -20%;
-            width: 50%;
-            height: 50%;
-            background: radial-gradient(ellipse, rgba(255,159,67,0.04) 0%, transparent 70%);
-            pointer-events: none;
-            z-index: 0;
+            bottom:-20%; right:-20%; width:50%; height:50%;
+            background:radial-gradient(ellipse,rgba(255,159,67,0.03) 0%,transparent 70%);
         }
-
-        .app {
-            position: relative;
-            z-index: 1;
-            max-width: 520px;
-            margin: 0 auto;
-            padding: 0 0 env(safe-area-inset-bottom, 20px);
-        }
+        .app { position:relative; z-index:1; max-width:520px; margin:0 auto; padding-bottom:env(safe-area-inset-bottom,20px); }
 
         /* ── Header ── */
-        .header {
-            padding: 24px 20px 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+        .header { padding:20px 16px 0; display:flex; align-items:center; justify-content:space-between; }
+        .brand { display:flex; align-items:center; gap:10px; }
+        .brand-icon { width:34px; height:34px; background:linear-gradient(135deg,var(--green),#00b87a); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:17px; box-shadow:0 4px 16px var(--green-glow); }
+        .brand h1 { font-size:1.05rem; font-weight:700; letter-spacing:-0.03em; line-height:1.1; }
+        .brand .sub { font-size:0.6rem; color:var(--text2); font-weight:400; letter-spacing:0.02em; }
+        .header-right { display:flex; align-items:center; gap:10px; }
+        .live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green-glow); animation:pulse 2.5s ease-in-out infinite; }
+        .live-dot.offline { background:var(--text3); box-shadow:none; animation:none; }
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.5;transform:scale(.85);} }
+        .update-time { font-family:'Space Mono',monospace; font-size:.65rem; color:var(--text2); }
+        .geo-btn { background:none; border:1px solid var(--border); border-radius:8px; padding:6px 8px; color:var(--text2); cursor:pointer; font-size:.75rem; transition:all .2s; }
+        .geo-btn:hover { border-color:var(--border2); color:var(--text); }
+        .geo-btn.active { border-color:rgba(0,224,158,.3); color:var(--green); background:var(--green-dim); }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        /* ── Favorites bar ── */
+        .fav-bar { padding:12px 16px 0; display:none; }
+        .fav-bar.show { display:block; }
+        .fav-bar-title { font-size:.6rem; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; font-weight:600; }
+        .fav-chips { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:4px; }
+        .fav-chips::-webkit-scrollbar { display:none; }
+        .fav-chip { flex-shrink:0; padding:6px 12px; background:var(--card); border:1px solid var(--border); border-radius:20px; font-size:.7rem; font-weight:500; color:var(--text2); cursor:pointer; transition:all .2s; white-space:nowrap; }
+        .fav-chip:hover { border-color:var(--border2); color:var(--text); }
+        .fav-chip .fc-times { font-family:'Space Mono',monospace; font-weight:700; color:var(--green); margin-left:4px; }
+        .fav-chip .fc-times.empty { color:var(--text3); }
 
-        .brand-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, var(--green), #00b87a);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            box-shadow: 0 4px 20px var(--green-glow);
-        }
+        /* ── Tabs ── */
+        .tabs { display:flex; gap:8px; padding:14px 16px 0; }
+        .tab { flex:1; padding:12px 0; border:1.5px solid var(--border); border-radius:var(--radius); cursor:pointer; font-family:inherit; font-size:.8rem; font-weight:600; background:var(--card); color:var(--text2); transition:all .3s cubic-bezier(.4,0,.2,1); text-align:center; position:relative; overflow:hidden; }
+        .tab .ln { font-size:.95rem; font-weight:800; display:block; letter-spacing:-0.02em; }
+        .tab .lr { font-size:.58rem; font-weight:400; color:var(--text3); margin-top:1px; display:block; }
+        .tab:hover { border-color:rgba(255,255,255,.1); }
+        .tab.active { border-color:rgba(0,224,158,.25); color:var(--text); }
+        .tab.active .lr { color:var(--text2); }
+        .tab.active::before { content:''; position:absolute; top:0; left:50%; transform:translateX(-50%); width:28px; height:2px; background:var(--green); border-radius:0 0 2px 2px; }
+        .tab[data-line="T1"].active { background:var(--t1-dim); border-color:rgba(0,165,194,.3); }
+        .tab[data-line="T1"].active::before { background:var(--t1); }
+        .tab[data-line="T2"].active { background:var(--t2-dim); border-color:rgba(0,109,120,.35); }
+        .tab[data-line="T2"].active::before { background:var(--t2); }
 
-        .brand-text h1 {
-            font-size: 1.15rem;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-        }
+        /* ── Traffic ── */
+        .traffic-banner { margin:12px 16px 0; background:var(--red-dim); border:1px solid rgba(255,107,107,.12); border-radius:var(--radius-sm); padding:8px 12px; display:none; font-size:.72rem; color:rgba(255,255,255,.65); line-height:1.4; }
+        .traffic-banner.show { display:flex; gap:8px; align-items:flex-start; }
+        .traffic-banner strong { color:var(--red); }
 
-        .brand-text .sub {
-            font-size: 0.65rem;
-            color: var(--text2);
-            font-weight: 400;
-            letter-spacing: 0.03em;
-        }
+        /* ── Directions ── */
+        .dir-bar { display:flex; justify-content:space-between; align-items:center; padding:12px 16px 6px; gap:8px; }
+        .dir-tag { font-family:'Space Mono',monospace; font-size:.54rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:4px 8px; border-radius:5px; white-space:nowrap; }
+        .dir-tag.left { background:var(--left-dim); color:var(--left); }
+        .dir-tag.right { background:var(--right-dim); color:var(--right); }
+        .dir-sep { flex:1; height:1px; background:var(--border); }
 
-        .header-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .live-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--green);
-            box-shadow: 0 0 8px var(--green-glow);
-            animation: pulse 2.5s ease-in-out infinite;
-        }
-
-        .live-dot.offline { background: var(--text3); box-shadow: none; animation: none; }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.85); }
-        }
-
-        .update-time {
-            font-family: 'Space Mono', monospace;
-            font-size: 0.68rem;
-            color: var(--text2);
-        }
-
-        /* ── Line Tabs ── */
-        .tabs {
-            display: flex;
-            gap: 8px;
-            padding: 20px 20px 0;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 14px 0;
-            border: 1.5px solid var(--border);
-            border-radius: var(--radius);
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.82rem;
-            font-weight: 600;
-            background: var(--card);
-            color: var(--text2);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .tab .line-name {
-            font-size: 1rem;
-            font-weight: 800;
-            display: block;
-            letter-spacing: -0.02em;
-        }
-
-        .tab .line-route {
-            font-size: 0.62rem;
-            font-weight: 400;
-            color: var(--text3);
-            margin-top: 2px;
-            display: block;
-        }
-
-        .tab:hover { border-color: rgba(255,255,255,0.12); }
-
-        .tab.active {
-            background: linear-gradient(135deg, rgba(0,224,158,0.12), rgba(0,224,158,0.04));
-            border-color: rgba(0,224,158,0.3);
-            color: var(--text);
-        }
-
-        .tab.active .line-route { color: var(--text2); }
-
-        .tab.active::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 30px;
-            height: 2px;
-            background: var(--green);
-            border-radius: 0 0 2px 2px;
-        }
-
-        /* ── Traffic Banner ── */
-        .traffic-banner {
-            margin: 16px 20px 0;
-            background: var(--red-dim);
-            border: 1px solid rgba(255,107,107,0.15);
-            border-radius: var(--radius-sm);
-            padding: 10px 14px;
-            display: none;
-            font-size: 0.75rem;
-            color: rgba(255,255,255,0.7);
-            line-height: 1.5;
-        }
-        .traffic-banner.show { display: flex; gap: 8px; align-items: flex-start; }
-        .traffic-banner .alert-icon { color: var(--red); flex-shrink: 0; font-size: 0.85rem; }
-        .traffic-banner strong { color: var(--red); }
-
-        /* ── Direction Bar ── */
-        .dir-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 20px 8px;
-            gap: 10px;
-        }
-
-        .dir-tag {
-            font-family: 'Space Mono', monospace;
-            font-size: 0.58rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            padding: 5px 10px;
-            border-radius: 6px;
-            white-space: nowrap;
-        }
-
-        .dir-tag.left {
-            background: var(--left-dim);
-            color: var(--left);
-        }
-
-        .dir-tag.right {
-            background: var(--right-dim);
-            color: var(--right);
-        }
-
-        .dir-sep {
-            flex: 1;
-            height: 1px;
-            background: var(--border);
-        }
-
-        /* ── Station List ── */
-        .stations-wrap {
-            padding: 0 12px;
-        }
-
-        .stations {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            overflow: hidden;
-        }
+        /* ── Stations ── */
+        .stations-wrap { padding:0 10px; }
+        .stations { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
 
         .station-row {
-            display: grid;
-            grid-template-columns: minmax(52px, 72px) 26px 1fr 26px minmax(52px, 72px);
-            align-items: center;
-            padding: 0 14px;
-            min-height: 48px;
-            transition: background 0.15s;
-            position: relative;
+            display:grid;
+            grid-template-columns:minmax(50px,1fr) 24px auto 24px minmax(50px,1fr);
+            align-items:center;
+            padding:0 12px;
+            min-height:46px;
+            position:relative;
+            cursor:pointer;
+            transition:background .15s;
         }
-
-        .station-row::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 52px;
-            right: 52px;
-            height: 1px;
-            background: var(--border);
-        }
-
-        .station-row:last-child::after { display: none; }
-
-        .station-row:hover { background: rgba(255,255,255,0.015); }
+        .station-row::after { content:''; position:absolute; bottom:0; left:46px; right:46px; height:1px; background:var(--border); }
+        .station-row:last-child::after { display:none; }
+        .station-row:hover { background:rgba(255,255,255,.015); }
+        .station-row.nearest { background:rgba(0,224,158,.04); }
+        .station-row.nearest .station-name { color:var(--green); }
 
         /* ── Times ── */
-        .times {
-            display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
-        }
-
-        .times.left { justify-content: flex-end; padding-right: 6px; }
-        .times.right { justify-content: flex-start; padding-left: 6px; }
+        .times { display:flex; gap:3px; flex-wrap:wrap; align-items:center; }
+        .times.left { justify-content:flex-end; padding-right:5px; }
+        .times.right { justify-content:flex-start; padding-left:5px; }
 
         .time-chip {
-            font-family: 'Space Mono', monospace;
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 3px 7px;
-            border-radius: 5px;
-            line-height: 1.2;
-            white-space: nowrap;
+            font-family:'Space Mono',monospace;
+            font-size:.68rem;
+            font-weight:700;
+            padding:2px 6px;
+            border-radius:5px;
+            line-height:1.3;
+            white-space:nowrap;
+            position:relative;
         }
+        .time-chip.now { background:var(--green); color:var(--bg); }
+        .time-chip.soon { background:rgba(255,179,71,.15); color:var(--amber); }
+        .time-chip.later { background:rgba(255,255,255,.04); color:var(--text2); }
+        .time-chip .dest-hint { font-size:.48rem; font-weight:400; color:var(--text3); display:block; line-height:1; margin-top:0px; }
+        .time-chip.now .dest-hint { color:rgba(0,0,0,.5); }
+        .time-chip.soon .dest-hint { color:rgba(255,179,71,.4); }
 
-        .time-chip.now {
-            background: var(--green);
-            color: var(--bg);
-            animation: glow-chip 2s ease-in-out infinite;
+        .no-data { font-size:.55rem; color:var(--text3); }
+
+        /* ── Track ── */
+        .track { position:relative; display:flex; align-items:center; justify-content:center; height:100%; min-height:46px; }
+        .track::before { content:''; position:absolute; top:0; bottom:0; left:50%; width:2px; transform:translateX(-50%); opacity:.2; }
+        .track.left::before { background:var(--left); }
+        .track.right::before { background:var(--right); }
+        .station-row:first-child .track::before { top:50%; }
+        .station-row:last-child .track::before { bottom:50%; }
+        .dot { width:8px; height:8px; border-radius:50%; background:var(--card); border:2px solid; z-index:2; transition:all .4s cubic-bezier(.4,0,.2,1); }
+        .dot.left { border-color:rgba(255,159,67,.35); }
+        .dot.right { border-color:rgba(95,108,245,.35); }
+        .dot.active { width:13px; height:13px; background:var(--green); border-color:var(--green); box-shadow:0 0 12px var(--green-glow); }
+
+        /* ── Station name ── */
+        .station-name { text-align:center; font-size:.73rem; font-weight:500; padding:8px 3px; line-height:1.15; color:var(--text); transition:all .2s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .station-name.highlight { color:var(--green); font-weight:700; }
+        .station-name .fav-star { font-size:.55rem; margin-left:2px; color:var(--amber); opacity:0; transition:opacity .2s; }
+        .station-row:hover .fav-star,.station-name .fav-star.on { opacity:1; }
+
+        /* ── Detail Panel ── */
+        .detail-panel {
+            max-height:0;
+            overflow:hidden;
+            transition:max-height .35s cubic-bezier(.4,0,.2,1);
+            background:var(--bg2);
+            border-top:1px solid var(--border);
         }
+        .detail-panel.open { max-height:260px; }
+        .detail-inner { padding:10px 14px 12px; }
+        .detail-section { margin-bottom:8px; }
+        .detail-label { font-size:.55rem; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; font-weight:600; }
+        .detail-row { display:flex; align-items:center; gap:8px; padding:3px 0; font-size:.72rem; }
+        .detail-row .dr-time { font-family:'Space Mono',monospace; font-weight:700; min-width:32px; }
+        .detail-row .dr-dest { color:var(--text2); }
+        .detail-row .dr-badge { font-size:.5rem; padding:1px 5px; border-radius:3px; font-weight:600; }
+        .dr-badge.gps { background:var(--green-dim); color:var(--green); }
+        .dr-badge.theo { background:rgba(255,255,255,.04); color:var(--text3); }
+        .dr-badge.crowd-0 { background:var(--green-dim); color:var(--green); }
+        .dr-badge.crowd-1 { background:rgba(255,179,71,.1); color:var(--amber); }
+        .dr-badge.crowd-2 { background:var(--red-dim); color:var(--red); }
+        .detail-actions { display:flex; gap:8px; margin-top:4px; }
+        .detail-actions button { font-family:inherit; font-size:.65rem; padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text2); cursor:pointer; transition:all .2s; }
+        .detail-actions button:hover { color:var(--text); border-color:var(--border2); }
+        .detail-actions button.faved { border-color:rgba(255,179,71,.3); color:var(--amber); background:rgba(255,179,71,.06); }
 
-        .time-chip.soon {
-            background: rgba(255,159,67,0.18);
-            color: var(--left);
-        }
+        /* ── Loading ── */
+        #stateContainer { padding:60px 20px; text-align:center; }
+        .state-icon { font-size:2rem; margin-bottom:14px; }
+        .state-title { font-size:.95rem; font-weight:600; margin-bottom:4px; }
+        .state-desc { font-size:.75rem; color:var(--text2); }
+        .loader { width:80px; height:2px; background:var(--card2); border-radius:2px; margin:16px auto 0; overflow:hidden; }
+        .loader::after { content:''; display:block; width:35%; height:100%; background:var(--green); border-radius:2px; animation:load-slide 1.4s ease-in-out infinite; }
+        @keyframes load-slide { 0%{transform:translateX(-100%);} 100%{transform:translateX(380%);} }
 
-        .time-chip.later {
-            background: rgba(255,255,255,0.05);
-            color: var(--text2);
-        }
+        .no-service { text-align:center; padding:20px 16px 0; display:none; }
+        .no-service.show { display:block; }
+        .no-service p { font-size:.72rem; color:var(--text2); line-height:1.5; }
 
-        .no-data {
-            font-size: 0.6rem;
-            color: var(--text3);
-        }
+        /* ── Controls ── */
+        .controls { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; }
+        .refresh-btn { display:flex; align-items:center; gap:5px; padding:8px 16px; background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:var(--radius-sm); font-family:inherit; font-size:.72rem; font-weight:500; cursor:pointer; transition:all .2s; }
+        .refresh-btn:hover { border-color:var(--border2); background:var(--card2); }
+        .refresh-btn:active { transform:scale(.97); }
+        .refresh-btn.loading { opacity:.5; pointer-events:none; }
+        .refresh-btn .spin { display:none; width:12px; height:12px; border:2px solid var(--text3); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; }
+        .refresh-btn.loading .spin { display:inline-block; }
+        .refresh-btn.loading .ricon { display:none; }
+        @keyframes spin { to{transform:rotate(360deg);} }
+        .debug-toggle { font-size:.65rem; color:var(--text3); cursor:pointer; padding:6px 8px; border-radius:6px; border:none; background:none; font-family:inherit; transition:all .2s; }
+        .debug-toggle:hover { color:var(--text2); background:rgba(255,255,255,.03); }
 
-        @keyframes glow-chip {
-            0%, 100% { box-shadow: 0 0 0 rgba(0,224,158,0); }
-            50% { box-shadow: 0 0 10px var(--green-glow); }
-        }
+        /* ── Legend + Credits ── */
+        .legend { display:flex; justify-content:center; gap:14px; padding:2px 16px 6px; flex-wrap:wrap; }
+        .legend-item { display:flex; align-items:center; gap:4px; font-size:.58rem; color:var(--text3); }
+        .legend-dot { width:6px; height:6px; border-radius:50%; }
+        .legend-dot.g { background:var(--green); box-shadow:0 0 5px var(--green-glow); }
+        .legend-dot.o { background:var(--left); }
+        .legend-dot.b { background:var(--right); }
+        .credits { text-align:center; padding:4px 16px 12px; font-size:.55rem; color:var(--text3); }
+        .credits a { color:var(--text2); text-decoration:none; }
 
-        /* ── Track & Dots ── */
-        .track {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            min-height: 48px;
-        }
-
-        .track::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 50%;
-            width: 2px;
-            transform: translateX(-50%);
-            opacity: 0.25;
-        }
-
-        .track.left::before { background: var(--left); }
-        .track.right::before { background: var(--right); }
-
-        .station-row:first-child .track::before { top: 50%; border-radius: 2px 2px 0 0; }
-        .station-row:last-child .track::before { bottom: 50%; border-radius: 0 0 2px 2px; }
-
-        .dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: var(--card);
-            border: 2px solid;
-            z-index: 2;
-            position: relative;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .dot.left { border-color: rgba(255,159,67,0.4); }
-        .dot.right { border-color: rgba(95,108,245,0.4); }
-
-        .dot.active {
-            width: 14px;
-            height: 14px;
-            background: var(--green);
-            border-color: var(--green);
-            box-shadow: 0 0 14px var(--green-glow);
-        }
-
-        /* ── Station Name ── */
-        .station-name {
-            text-align: center;
-            font-size: 0.76rem;
-            font-weight: 500;
-            padding: 10px 4px;
-            border-radius: 6px;
-            transition: all 0.3s;
-            line-height: 1.15;
-            color: var(--text);
-        }
-
-        .station-name.highlight {
-            background: var(--green-dim);
-            color: var(--green);
-            font-weight: 700;
-        }
-
-        /* ── Footer Controls ── */
-        .controls {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 20px;
-        }
-
-        .refresh-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 9px 20px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            color: var(--text);
-            border-radius: var(--radius-sm);
-            font-family: inherit;
-            font-size: 0.75rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .refresh-btn:hover {
-            border-color: rgba(255,255,255,0.12);
-            background: var(--card2);
-        }
-
-        .refresh-btn:active { transform: scale(0.97); }
-
-        .refresh-btn.loading { opacity: 0.5; pointer-events: none; }
-
-        .refresh-btn .spin {
-            display: none;
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--text3);
-            border-top-color: var(--green);
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-
-        .refresh-btn.loading .spin { display: inline-block; }
-        .refresh-btn.loading .ricon { display: none; }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .debug-toggle {
-            font-size: 0.7rem;
-            color: var(--text3);
-            cursor: pointer;
-            padding: 6px 10px;
-            border-radius: 6px;
-            transition: all 0.2s;
-            border: none;
-            background: none;
-            font-family: inherit;
-        }
-
-        .debug-toggle:hover { color: var(--text2); background: rgba(255,255,255,0.03); }
-
-        /* ── Loading State ── */
-        .state-msg {
-            padding: 80px 20px;
-            text-align: center;
-        }
-
-        .state-msg .icon { font-size: 2.2rem; margin-bottom: 16px; }
-
-        .state-msg .title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 6px;
-        }
-
-        .state-msg .desc {
-            font-size: 0.78rem;
-            color: var(--text2);
-            max-width: 280px;
-            margin: 0 auto;
-            line-height: 1.5;
-        }
-
-        .loader {
-            width: 100px;
-            height: 2px;
-            background: var(--card2);
-            border-radius: 2px;
-            margin: 20px auto 0;
-            overflow: hidden;
-        }
-
-        .loader::after {
-            content: '';
-            display: block;
-            width: 35%;
-            height: 100%;
-            background: var(--green);
-            border-radius: 2px;
-            animation: load-slide 1.4s ease-in-out infinite;
-        }
-
-        @keyframes load-slide {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(380%); }
-        }
-
-        /* ── No Service State ── */
-        .no-service {
-            text-align: center;
-            padding: 30px 20px 10px;
-            display: none;
-        }
-
-        .no-service.show { display: block; }
-
-        .no-service p {
-            font-size: 0.75rem;
-            color: var(--text2);
-            line-height: 1.6;
-        }
-
-        /* ── Legend ── */
-        .legend {
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            padding: 4px 20px 8px;
-            flex-wrap: wrap;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.62rem;
-            color: var(--text3);
-        }
-
-        .legend-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-        }
-
-        .legend-dot.g { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
-        .legend-dot.o { background: var(--left); }
-        .legend-dot.b { background: var(--right); }
-
-        /* ── Credits ── */
-        .credits {
-            text-align: center;
-            padding: 6px 20px 16px;
-            font-size: 0.58rem;
-            color: var(--text3);
-        }
-
-        .credits a {
-            color: var(--text2);
-            text-decoration: none;
-        }
-
-        /* ── Diagnostic Log ── */
-        .conn-log {
-            margin: 0 12px 16px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            font-family: 'Space Mono', monospace;
-            font-size: 0.62rem;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .conn-log.open {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .conn-log-inner {
-            padding: 14px;
-        }
-
-        .conn-title {
-            font-family: 'Outfit', sans-serif;
-            font-weight: 600;
-            font-size: 0.72rem;
-            margin-bottom: 8px;
-            color: var(--text2);
-        }
-
-        .conn-entry {
-            padding: 3px 0;
-            border-bottom: 1px solid var(--border);
-            line-height: 1.6;
-            display: flex;
-            gap: 6px;
-            align-items: flex-start;
-        }
-
-        .conn-entry:last-child { border-bottom: none; }
-
-        .conn-time { color: var(--text3); white-space: nowrap; flex-shrink: 0; }
-        .conn-status { flex-shrink: 0; width: 16px; text-align: center; }
-        .conn-msg { color: var(--text2); word-break: break-all; }
-        .conn-msg.dim { color: var(--text3); }
-        .conn-msg.ok { color: var(--green); }
-        .conn-msg.err { color: var(--red); }
-        .conn-msg.warn { color: var(--left); }
+        /* ── Conn log ── */
+        .conn-log { margin:0 10px 14px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); font-family:'Space Mono',monospace; font-size:.58rem; max-height:0; overflow:hidden; transition:max-height .4s cubic-bezier(.4,0,.2,1); }
+        .conn-log.open { max-height:350px; overflow-y:auto; }
+        .conn-log-inner { padding:12px; }
+        .conn-title { font-family:'Outfit',sans-serif; font-weight:600; font-size:.68rem; margin-bottom:6px; color:var(--text2); }
+        .conn-entry { padding:2px 0; border-bottom:1px solid var(--border); line-height:1.5; display:flex; gap:5px; align-items:flex-start; }
+        .conn-entry:last-child { border:none; }
+        .conn-time { color:var(--text3); white-space:nowrap; flex-shrink:0; }
+        .conn-status { flex-shrink:0; width:14px; text-align:center; }
+        .conn-msg { color:var(--text2); word-break:break-all; }
+        .conn-msg.dim { color:var(--text3); }
+        .conn-msg.ok { color:var(--green); }
+        .conn-msg.err { color:var(--red); }
+        .conn-msg.warn { color:var(--left); }
 
         /* ── Responsive ── */
-        @media (max-width: 420px) {
-            .station-row {
-                grid-template-columns: minmax(42px, 1fr) 22px 1fr 22px minmax(42px, 1fr);
-                padding: 0 10px;
-                min-height: 42px;
-            }
-            .station-name { font-size: 0.68rem; padding: 8px 2px; }
-            .time-chip { font-size: 0.64rem; padding: 2px 5px; }
-            .dir-tag { font-size: 0.52rem; padding: 4px 7px; }
+        @media(max-width:420px) {
+            .station-row { grid-template-columns:minmax(40px,1fr) 20px auto 20px minmax(40px,1fr); padding:0 8px; min-height:42px; }
+            .station-name { font-size:.66rem; }
+            .time-chip { font-size:.62rem; padding:2px 5px; }
+            .dir-tag { font-size:.48rem; }
         }
-
-        /* ── Animations ── */
-        .station-row {
-            animation: row-in 0.3s ease-out both;
-        }
-
-        @keyframes row-in {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .station-row { animation:row-in .3s ease-out both; }
+        @keyframes row-in { from{opacity:0;transform:translateY(5px);} to{opacity:1;transform:translateY(0);} }
     </style>
 </head>
 <body>
 <div class="app">
-
-    <!-- Header -->
     <div class="header">
         <div class="brand">
             <div class="brand-icon">🚊</div>
-            <div class="brand-text">
+            <div>
                 <h1>Ginko Tram</h1>
                 <div class="sub">Besançon — temps réel</div>
             </div>
         </div>
-        <div class="header-status">
+        <div class="header-right">
+            <button class="geo-btn" id="geoBtn" onclick="toggleGeo()" title="Me localiser">📍</button>
             <div class="live-dot" id="liveDot"></div>
             <span class="update-time" id="updateInfo">—</span>
         </div>
     </div>
 
-    <!-- Line Tabs -->
+    <div class="fav-bar" id="favBar">
+        <div class="fav-bar-title">★ Favoris</div>
+        <div class="fav-chips" id="favChips"></div>
+    </div>
+
     <div class="tabs">
-        <button class="tab active" onclick="selectLine('T1', this)">
-            <span class="line-name">T1</span>
-            <span class="line-route">Hauts du Chazal ↔ Chalezeule</span>
-        </button>
-        <button class="tab" onclick="selectLine('T2', this)">
-            <span class="line-name">T2</span>
-            <span class="line-route">Hauts du Chazal ↔ Gare Viotte</span>
-        </button>
+        <button class="tab active" data-line="T1" onclick="selectLine('T1',this)"><span class="ln">T1</span><span class="lr">Hauts du Chazal ↔ Chalezeule</span></button>
+        <button class="tab" data-line="T2" onclick="selectLine('T2',this)"><span class="ln">T2</span><span class="lr">Hauts du Chazal ↔ Gare Viotte</span></button>
     </div>
 
-    <!-- Traffic Alert -->
-    <div id="trafficBanner" class="traffic-banner">
-        <span class="alert-icon">⚠</span>
-        <span id="trafficText"></span>
-    </div>
+    <div id="trafficBanner" class="traffic-banner"><span>⚠</span> <span id="trafficText"></span></div>
 
-    <!-- Direction Labels -->
     <div class="dir-bar">
         <div class="dir-tag left" id="dirLeft">← Hauts du Chazal</div>
         <div class="dir-sep"></div>
         <div class="dir-tag right" id="dirRight">Chalezeule →</div>
     </div>
 
-    <!-- Loading State -->
     <div id="stateContainer">
-        <div class="state-msg">
-            <div class="icon">🚊</div>
-            <div class="title">Connexion en cours…</div>
-            <div class="desc">Récupération des temps de passage</div>
-            <div class="loader"></div>
-        </div>
+        <div class="state-icon">🚊</div>
+        <div class="state-title">Connexion en cours…</div>
+        <div class="state-desc">Récupération des temps de passage</div>
+        <div class="loader"></div>
     </div>
 
-    <!-- Station List -->
     <div class="stations-wrap">
         <div class="stations" id="stationsList" style="display:none;"></div>
     </div>
 
-    <!-- No Service Notice -->
     <div class="no-service" id="noService">
-        <p>Aucun tram en circulation actuellement.<br>Le service reprend vers 5h le dimanche, 4h30 en semaine.</p>
+        <p>Aucun tram en circulation.<br>Service : ~5h–0h30 (dim 5h30–23h30)</p>
     </div>
 
-    <!-- Controls -->
     <div class="controls">
-        <button class="refresh-btn" id="refreshBtn" onclick="refreshData()">
-            <span class="ricon">↻</span>
-            <span class="spin"></span>
-            Actualiser
-        </button>
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><span class="ricon">↻</span><span class="spin"></span> Actualiser</button>
         <button class="debug-toggle" onclick="toggleLog()">Diagnostic ▾</button>
     </div>
 
-    <!-- Legend -->
     <div class="legend">
-        <div class="legend-item"><div class="legend-dot g"></div>Tram à quai</div>
-        <div class="legend-item"><div class="legend-dot o"></div>← Hauts du Chazal</div>
-        <div class="legend-item"><div class="legend-dot b"></div><span id="legendRight">Chalezeule →</span></div>
+        <div class="legend-item"><div class="legend-dot g"></div>À quai</div>
+        <div class="legend-item"><div class="legend-dot o"></div>← Ouest</div>
+        <div class="legend-item"><div class="legend-dot b"></div><span id="legendRight">Est →</span></div>
     </div>
 
-    <!-- Credits -->
-    <div class="credits">
-        Données <a href="https://api.ginko.voyage" target="_blank">Open Data Ginko</a> · Licence ODbL
-    </div>
+    <div class="credits">Données <a href="https://api.ginko.voyage" target="_blank">Open Data Ginko</a> · ODbL</div>
 
-    <!-- Debug Log -->
     <div id="connLog" class="conn-log">
         <div class="conn-log-inner">
-            <div class="conn-title">Diagnostic connexion</div>
+            <div class="conn-title">Diagnostic</div>
             <div id="connEntries"></div>
         </div>
     </div>
 </div>
 
 <script>
-(function() {
-    'use strict';
+(function(){
+'use strict';
 
-    var WORKER = 'https://cold-rain-f589.cedric-thomas6.workers.dev';
-    var REFRESH_INTERVAL = 30000;
-    var TIMEOUT = 15000;
+var WORKER='https://cold-rain-f589.cedric-thomas6.workers.dev';
+var REFRESH=30000, TIMEOUT=15000;
 
-    var LINES = {
-        T1: {
-            id: '101',
-            leftDir: 'Hauts du Chazal', rightDir: 'Chalezeule',
-            stations: [
-                'Hauts du Chazal','UFR Santé','Maison des Familles','CHU Minjoz',
-                'Île-de-France','Époisses','Allende','Micropolis',
-                'Malcombe','Rosemont','Brulard','Polygone',
-                'Chamars','Canot','Battant','Révolution',
-                'République','Parc Micaud','Fontaine Argent','Tristan Bernard',
-                'Brûlefoin','Les Vaîtes','Schweitzer','Croix de Palente',
-                'Lilas','Orchamps','Fort Benoît','Marnières','Chalezeule'
-            ]
-        },
-        T2: {
-            id: '102',
-            leftDir: 'Hauts du Chazal', rightDir: 'Gare Viotte',
-            stations: [
-                'Hauts du Chazal','UFR Santé','Maison des Familles','CHU Minjoz',
-                'Île-de-France','Époisses','Allende','Micropolis',
-                'Malcombe','Rosemont','Brulard','Polygone',
-                'Chamars','Canot','Battant','Révolution',
-                'République','Parc Micaud','Flore','Gare Viotte'
-            ]
+/* ── Station coords (lat,lng) for geolocation ── */
+var COORDS={
+'Hauts du Chazal':[47.2270,5.9685],
+'UFR Santé':[47.2282,5.9720],
+'Maison des Familles':[47.2299,5.9773],
+'CHU Minjoz':[47.2318,5.9800],
+'Île-de-France':[47.2330,5.9850],
+'Époisses':[47.2335,5.9895],
+'Allende':[47.2340,5.9933],
+'Micropolis':[47.2348,5.9972],
+'Malcombe':[47.2358,6.0018],
+'Rosemont':[47.2370,6.0058],
+'Brulard':[47.2382,6.0092],
+'Polygone':[47.2387,6.0128],
+'Chamars':[47.2380,6.0168],
+'Canot':[47.2395,6.0170],
+'Battant':[47.2412,6.0175],
+'Révolution':[47.2400,6.0210],
+'République':[47.2385,6.0253],
+'Parc Micaud':[47.2402,6.0280],
+'Fontaine Argent':[47.2428,6.0280],
+'Tristan Bernard':[47.2450,6.0268],
+'Brûlefoin':[47.2468,6.0290],
+'Les Vaîtes':[47.2490,6.0320],
+'Schweitzer':[47.2508,6.0370],
+'Croix de Palente':[47.2520,6.0405],
+'Lilas':[47.2530,6.0450],
+'Orchamps':[47.2540,6.0500],
+'Fort Benoît':[47.2548,6.0545],
+'Marnières':[47.2555,6.0580],
+'Chalezeule':[47.2560,6.0620],
+'Flore':[47.2438,6.0240],
+'Gare Viotte':[47.2468,6.0198]
+};
+
+var LINES={
+    T1:{id:'101',leftDir:'Hauts du Chazal',rightDir:'Chalezeule',
+        stations:['Hauts du Chazal','UFR Santé','Maison des Familles','CHU Minjoz','Île-de-France','Époisses','Allende','Micropolis','Malcombe','Rosemont','Brulard','Polygone','Chamars','Canot','Battant','Révolution','République','Parc Micaud','Fontaine Argent','Tristan Bernard','Brûlefoin','Les Vaîtes','Schweitzer','Croix de Palente','Lilas','Orchamps','Fort Benoît','Marnières','Chalezeule']},
+    T2:{id:'102',leftDir:'Hauts du Chazal',rightDir:'Gare Viotte',
+        stations:['Hauts du Chazal','UFR Santé','Maison des Familles','CHU Minjoz','Île-de-France','Époisses','Allende','Micropolis','Malcombe','Rosemont','Brulard','Polygone','Chamars','Canot','Battant','Révolution','République','Parc Micaud','Flore','Gare Viotte']}
+};
+
+var currentLine='T1', refreshTimer=null, isLoading=false, logOpen=false;
+var stationData={};  // name -> {left:[{min,dest,fiable,charge}], right:[...]}
+var openDetail=-1, nearestIdx=-1, geoActive=false, geoWatchId=null;
+var $=function(id){return document.getElementById(id);};
+
+/* ── Favorites ── */
+function getFavs(){ try{return JSON.parse(localStorage.getItem('ginko-favs'))||[];}catch(e){return [];} }
+function setFavs(f){ localStorage.setItem('ginko-favs',JSON.stringify(f)); }
+function isFav(name){ return getFavs().indexOf(name)>=0; }
+function toggleFav(name){
+    var f=getFavs(), i=f.indexOf(name);
+    if(i>=0) f.splice(i,1); else f.push(name);
+    setFavs(f);
+    renderFavBar();
+    buildStations();
+}
+function renderFavBar(){
+    var f=getFavs();
+    var bar=$('favBar'), chips=$('favChips');
+    if(!f.length){ bar.classList.remove('show'); return; }
+    bar.classList.add('show');
+    chips.innerHTML='';
+    f.forEach(function(name){
+        var d=stationData[name.toLowerCase()];
+        var times=[];
+        if(d){
+            d.left.concat(d.right).forEach(function(t){times.push(t.min);});
+            times.sort(function(a,b){return a-b;});
         }
-    };
+        var chip=document.createElement('div');
+        chip.className='fav-chip';
+        chip.onclick=function(){ scrollToStation(name); };
+        var tStr=times.length? times.slice(0,2).map(function(t){return t<=0?'⇢':t+"'";}).join(' '):'—';
+        chip.innerHTML=name+'<span class="fc-times'+(times.length?'':' empty')+'">'+tStr+'</span>';
+        chips.appendChild(chip);
+    });
+}
+function scrollToStation(name){
+    var line=LINES[currentLine];
+    var idx=line.stations.indexOf(name);
+    if(idx<0) return;
+    var row=document.querySelector('.station-row:nth-child('+(idx+1)+')');
+    if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
+}
 
-    var currentLine = 'T1';
-    var refreshTimer = null;
-    var isLoading = false;
-    var logOpen = false;
-    var $ = function(id) { return document.getElementById(id); };
-
-    window.toggleLog = function() {
-        logOpen = !logOpen;
-        $('connLog').classList.toggle('open', logOpen);
-    };
-
-    function logConn(status, msg, cls) {
-        var el = $('connEntries');
-        if (!el) return;
-        var t = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-        var icon = status==='ok'?'✅':status==='err'?'❌':status==='warn'?'⚠️':'ℹ️';
-        var d = document.createElement('div');
-        d.className = 'conn-entry';
-        d.innerHTML = '<span class="conn-time">'+t+'</span><span class="conn-status">'+icon+'</span><span class="conn-msg '+(cls||'')+'">'+msg+'</span>';
-        el.appendChild(d);
-        var p = el.parentElement;
-        if (p) p.scrollTop = p.scrollHeight;
+/* ── Geolocation ── */
+function toggleGeo(){
+    if(geoActive){ stopGeo(); return; }
+    if(!navigator.geolocation){ logConn('warn','Géoloc non disponible','warn'); return; }
+    geoActive=true;
+    $('geoBtn').classList.add('active');
+    logConn('info','Géolocalisation activée…','dim');
+    geoWatchId=navigator.geolocation.watchPosition(onGeoPos,onGeoErr,{enableHighAccuracy:true,maximumAge:15000,timeout:10000});
+}
+window.toggleGeo=toggleGeo;
+function stopGeo(){
+    geoActive=false;
+    $('geoBtn').classList.remove('active');
+    if(geoWatchId!==null){navigator.geolocation.clearWatch(geoWatchId);geoWatchId=null;}
+    nearestIdx=-1;
+    document.querySelectorAll('.station-row.nearest').forEach(function(r){r.classList.remove('nearest');});
+}
+function onGeoPos(pos){
+    var lat=pos.coords.latitude,lng=pos.coords.longitude;
+    var line=LINES[currentLine], bestDist=Infinity, bestIdx=-1;
+    line.stations.forEach(function(name,i){
+        var c=COORDS[name]; if(!c)return;
+        var d=haversine(lat,lng,c[0],c[1]);
+        if(d<bestDist){bestDist=d;bestIdx=i;}
+    });
+    nearestIdx=bestIdx;
+    document.querySelectorAll('.station-row').forEach(function(r,i){
+        r.classList.toggle('nearest',i===bestIdx);
+    });
+    if(bestIdx>=0){
+        logConn('ok','Station proche: '+line.stations[bestIdx]+' ('+Math.round(bestDist)+'m)','ok');
+        var row=document.querySelector('.station-row:nth-child('+(bestIdx+1)+')');
+        if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
     }
+}
+function onGeoErr(e){ logConn('warn','Géoloc: '+e.message,'warn'); }
+function haversine(lat1,lon1,lat2,lon2){
+    var R=6371000,r=Math.PI/180;
+    var dLat=(lat2-lat1)*r,dLon=(lon2-lon1)*r;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
 
-    function workerFetch(url) {
-        return new Promise(function(resolve, reject) {
-            var timer = setTimeout(function() { reject(new Error('Timeout')); }, TIMEOUT);
-            fetch(url).then(function(res) {
-                clearTimeout(timer);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.json();
-            }).then(resolve).catch(function(e) {
-                clearTimeout(timer);
-                reject(e);
-            });
+/* ── Log ── */
+window.toggleLog=function(){logOpen=!logOpen;$('connLog').classList.toggle('open',logOpen);};
+function logConn(s,m,c){var e=$('connEntries');if(!e)return;var t=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});var i=s==='ok'?'✅':s==='err'?'❌':s==='warn'?'⚠️':'ℹ️';var d=document.createElement('div');d.className='conn-entry';d.innerHTML='<span class="conn-time">'+t+'</span><span class="conn-status">'+i+'</span><span class="conn-msg '+(c||'')+'">'+m+'</span>';e.appendChild(d);e.parentElement.scrollTop=e.parentElement.scrollHeight;}
+
+function workerFetch(url){return new Promise(function(ok,ko){var t=setTimeout(function(){ko(new Error('Timeout'));},TIMEOUT);fetch(url).then(function(r){clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(ok).catch(function(e){clearTimeout(t);ko(e);});});}
+
+/* ── Build station rows ── */
+function buildStations(){
+    var line=LINES[currentLine], c=$('stationsList');
+    c.innerHTML=''; openDetail=-1;
+    line.stations.forEach(function(name,i){
+        var fav=isFav(name);
+        var r=document.createElement('div');
+        r.className='station-row'+(i===nearestIdx?' nearest':'');
+        r.style.animationDelay=(i*12)+'ms';
+        r.onclick=function(e){if(e.target.closest('.detail-panel'))return;toggleDetail(i);};
+        r.innerHTML=
+            '<div class="times left" id="tl-'+i+'"><span class="no-data">—</span></div>'+
+            '<div class="track left"><div class="dot left" id="dl-'+i+'"></div></div>'+
+            '<div class="station-name" id="sn-'+i+'">'+name+'<span class="fav-star'+(fav?' on':'')+'">★</span></div>'+
+            '<div class="track right"><div class="dot right" id="dr-'+i+'"></div></div>'+
+            '<div class="times right" id="tr-'+i+'"><span class="no-data">—</span></div>';
+        c.appendChild(r);
+        // detail panel
+        var dp=document.createElement('div');
+        dp.className='detail-panel';
+        dp.id='dp-'+i;
+        dp.innerHTML='<div class="detail-inner" id="di-'+i+'"></div>';
+        c.appendChild(dp);
+    });
+}
+
+function toggleDetail(idx){
+    var line=LINES[currentLine];
+    // close previous
+    if(openDetail>=0 && openDetail!==idx){
+        var prev=$('dp-'+openDetail);
+        if(prev) prev.classList.remove('open');
+    }
+    var panel=$('dp-'+idx);
+    if(!panel)return;
+    var isOpen=panel.classList.contains('open');
+    panel.classList.toggle('open');
+    openDetail=isOpen?-1:idx;
+    if(!isOpen) renderDetail(idx);
+}
+
+function renderDetail(idx){
+    var line=LINES[currentLine], name=line.stations[idx];
+    var d=stationData[name.toLowerCase()];
+    var inner=$('di-'+idx);
+    if(!inner)return;
+    var fav=isFav(name);
+    var html='';
+
+    // Left direction
+    html+='<div class="detail-section"><div class="detail-label">← '+line.leftDir+'</div>';
+    if(d && d.left.length){
+        d.left.forEach(function(t){
+            var cls=t.min<=1?'now':t.min<=5?'soon':'later';
+            html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+            html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
+            if(t.charge>=0){
+                var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';
+                var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';
+                html+='<span class="dr-badge '+cc+'">'+cl+'</span>';
+            }
+            html+='</div>';
         });
-    }
+    } else { html+='<div class="detail-row"><span class="no-data">Aucun passage prévu</span></div>'; }
+    html+='</div>';
 
-    function buildStations() {
-        var line = LINES[currentLine];
-        var c = $('stationsList');
-        c.innerHTML = '';
-        line.stations.forEach(function(name, i) {
-            var r = document.createElement('div');
-            r.className = 'station-row';
-            r.style.animationDelay = (i * 15) + 'ms';
-            r.innerHTML =
-                '<div class="times left" id="tl-'+i+'"><span class="no-data">—</span></div>'+
-                '<div class="track left"><div class="dot left" id="dl-'+i+'"></div></div>'+
-                '<div class="station-name" id="sn-'+i+'">'+name+'</div>'+
-                '<div class="track right"><div class="dot right" id="dr-'+i+'"></div></div>'+
-                '<div class="times right" id="tr-'+i+'"><span class="no-data">—</span></div>';
-            c.appendChild(r);
+    // Right direction
+    html+='<div class="detail-section"><div class="detail-label">'+line.rightDir+' →</div>';
+    if(d && d.right.length){
+        d.right.forEach(function(t){
+            var cls=t.min<=1?'now':t.min<=5?'soon':'later';
+            html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+            html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
+            if(t.charge>=0){
+                var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';
+                var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';
+                html+='<span class="dr-badge '+cc+'">'+cl+'</span>';
+            }
+            html+='</div>';
         });
-    }
+    } else { html+='<div class="detail-row"><span class="no-data">Aucun passage prévu</span></div>'; }
+    html+='</div>';
 
-    function fetchAllTimes() {
-        var line = LINES[currentLine];
-        var noms = line.stations.join(',');
-        var ligneId = line.id;
-        var url = WORKER + '?method=batch&noms=' + encodeURIComponent(noms) + '&ligne=' + ligneId + '&nb=3';
+    html+='<div class="detail-actions"><button class="'+(fav?'faved':'')+'" onclick="event.stopPropagation();toggleFav(\''+name.replace(/'/g,"\\'")+'\')">'+(fav?'★ Retirer des favoris':'☆ Ajouter aux favoris')+'</button></div>';
 
-        logConn('info', 'Batch ' + currentLine + ' (' + line.stations.length + ' stations)…', 'dim');
+    inner.innerHTML=html;
+}
+window.toggleFav=toggleFav;
 
-        return workerFetch(url).then(function(data) {
-            if (!data.ok) throw new Error(data.msg || 'Erreur');
+/* ── Fetch data ── */
+function fetchAllTimes(){
+    var line=LINES[currentLine], noms=line.stations.join(',');
+    var url=WORKER+'?method=batch&noms='+encodeURIComponent(noms)+'&ligne='+line.id+'&nb=3';
+    logConn('info','Batch '+currentLine+' ('+line.stations.length+' stations)…','dim');
 
-            var lookup = {};
-            var apiNames = {};
+    return workerFetch(url).then(function(data){
+        if(!data.ok)throw new Error(data.msg||'Erreur');
+        stationData={};
 
-            if (data.aller && data.aller.ok && data.aller.objets) {
-                data.aller.objets.forEach(function(lieu) {
-                    var key = lieu.nomExact.toLowerCase();
-                    apiNames[key] = lieu.nomExact;
-                    if (!lookup[key]) lookup[key] = { left: [], right: [] };
-                    (lieu.listeTemps || []).forEach(function(t) {
-                        lookup[key].right.push(t.tempsEnMinute);
+        function processDir(dir,side){
+            if(!dir||!dir.ok||!dir.objets)return;
+            dir.objets.forEach(function(lieu){
+                var key=lieu.nomExact.toLowerCase();
+                if(!stationData[key])stationData[key]={left:[],right:[]};
+                (lieu.listeTemps||[]).forEach(function(t){
+                    stationData[key][side].push({
+                        min:t.tempsEnMinute,
+                        dest:t.destination||'?',
+                        fiable:t.fiable!==false,
+                        charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1
                     });
                 });
-            }
-
-            if (data.retour && data.retour.ok && data.retour.objets) {
-                data.retour.objets.forEach(function(lieu) {
-                    var key = lieu.nomExact.toLowerCase();
-                    apiNames[key] = lieu.nomExact;
-                    if (!lookup[key]) lookup[key] = { left: [], right: [] };
-                    (lieu.listeTemps || []).forEach(function(t) {
-                        lookup[key].left.push(t.tempsEnMinute);
-                    });
-                });
-            }
-
-            var foundNames = Object.keys(apiNames);
-            if (foundNames.length > 0) {
-                logConn('ok', foundNames.length + ' stations: ' + foundNames.map(function(k){return apiNames[k];}).slice(0,5).join(', ') + (foundNames.length > 5 ? '…' : ''), 'dim');
-            }
-
-            var okCount = 0;
-            var missingNames = [];
-            line.stations.forEach(function(name, i) {
-                var key = name.toLowerCase();
-                var info = lookup[key];
-                if (info && (info.left.length || info.right.length)) {
-                    info.left.sort(function(a,b){return a-b;});
-                    info.right.sort(function(a,b){return a-b;});
-                    renderTimes('tl-'+i, 'dl-'+i, info.left);
-                    renderTimes('tr-'+i, 'dr-'+i, info.right);
-                    var n = $('sn-'+i);
-                    if (n) n.classList.toggle('highlight',
-                        !!(info.left.length && info.left[0]<=1) ||
-                        !!(info.right.length && info.right[0]<=1));
-                    okCount++;
-                } else {
-                    renderTimes('tl-'+i, 'dl-'+i, []);
-                    renderTimes('tr-'+i, 'dr-'+i, []);
-                    if (foundNames.length > 0) missingNames.push(name);
-                }
             });
-
-            if (missingNames.length > 0 && foundNames.length > 0) {
-                logConn('warn', 'Non trouvées: ' + missingNames.join(', '), 'warn');
-            }
-
-            logConn('ok', okCount + '/' + line.stations.length + ' stations actives', 'ok');
-            return okCount;
-        });
-    }
-
-    function renderTimes(tid, did, times) {
-        var te = $(tid), de = $(did);
-        if (!te || !de) return;
-        if (!times.length) {
-            te.innerHTML = '<span class="no-data">—</span>';
-            de.classList.remove('active');
-            return;
         }
-        te.innerHTML = times.slice(0, 2).map(function(t) {
-            var c = t <= 1 ? 'now' : t <= 5 ? 'soon' : 'later';
-            return '<span class="time-chip ' + c + '">' + (t <= 0 ? '⇢' : t + "'") + '</span>';
-        }).join('');
-        de.classList.toggle('active', times[0] <= 1);
-    }
+        processDir(data.aller,'right');
+        processDir(data.retour,'left');
 
-    window.selectLine = function(line, btn) {
-        if (line === currentLine && $('stationsList').childNodes.length > 0) return;
-        currentLine = line;
-        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-        btn.classList.add('active');
-        var info = LINES[line];
-        $('dirLeft').textContent = '← ' + info.leftDir;
-        $('dirRight').textContent = info.rightDir + ' →';
-        $('legendRight').textContent = info.rightDir + ' →';
-        buildStations();
-        refreshData();
-    };
-
-    window.refreshData = function() {
-        if (isLoading) return;
-        isLoading = true;
-        $('refreshBtn').classList.add('loading');
-
-        fetchAllTimes().then(function(okCount) {
-            var total = LINES[currentLine].stations.length;
-            $('stationsList').style.display = 'block';
-            $('stateContainer').style.display = 'none';
-            $('noService').classList.toggle('show', okCount === 0);
-            $('liveDot').classList.toggle('offline', okCount === 0);
-            $('updateInfo').textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
-        }).catch(function(e) {
-            logConn('err', e.message, 'err');
-            $('updateInfo').textContent = 'Erreur';
-            $('liveDot').classList.add('offline');
-        }).finally(function() {
-            isLoading = false;
-            $('refreshBtn').classList.remove('loading');
-        });
-    };
-
-    function fetchTrafficInfo() {
-        workerFetch(WORKER + '?method=etat').then(function(data) {
-            if (!data.ok || !data.objets) return;
-            var lineId = LINES[currentLine].id;
-            var etat = data.objets.find(function(e) { return e.idLigne === lineId; });
-            if (etat && etat.etat > 0 && etat.etat !== 4) {
-                var msgs = {1:'Perturbation mineure', 2:'Perturbation modérée', 3:'Perturbation majeure', 5:'Service interrompu', 6:'Service non assuré'};
-                $('trafficText').innerHTML = '<strong>' + (etat.numLignePublic || currentLine) + '</strong> — ' + (msgs[etat.etat] || 'État ' + etat.etat);
-                $('trafficBanner').classList.add('show');
+        var okCount=0;
+        line.stations.forEach(function(name,i){
+            var d=stationData[name.toLowerCase()];
+            if(d && (d.left.length||d.right.length)){
+                d.left.sort(function(a,b){return a.min-b.min;});
+                d.right.sort(function(a,b){return a.min-b.min;});
+                renderTimes('tl-'+i,'dl-'+i,d.left,'left');
+                renderTimes('tr-'+i,'dr-'+i,d.right,'right');
+                var n=$('sn-'+i);
+                if(n)n.classList.toggle('highlight',
+                    !!(d.left.length&&d.left[0].min<=1)||!!(d.right.length&&d.right[0].min<=1));
+                okCount++;
+            } else {
+                renderTimes('tl-'+i,'dl-'+i,[],'left');
+                renderTimes('tr-'+i,'dr-'+i,[],'right');
             }
-        }).catch(function() {});
-    }
-
-    function init() {
-        logConn('info', '<b>v15</b> — TR/getListeTemps via Worker', '');
-
-        var testUrl = WORKER + '?method=temps&nom=' + encodeURIComponent('République') + '&ligne=101&sens=false&nb=3';
-        workerFetch(testUrl).then(function(data) {
-            if (!data.ok) throw new Error(data.msg);
-            var nb = 0;
-            if (data.objets) data.objets.forEach(function(l) { nb += (l.listeTemps||[]).length; });
-            logConn('ok', 'API OK — ' + nb + ' passages test', 'ok');
-        }).catch(function(e) {
-            logConn('err', e.message, 'err');
-        }).then(function() {
-            buildStations();
-            refreshData();
-            fetchTrafficInfo();
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(refreshData, REFRESH_INTERVAL);
-            setInterval(fetchTrafficInfo, 120000);
+            // refresh open detail
+            if(openDetail===i) renderDetail(i);
         });
-    }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+        renderFavBar();
+        logConn('ok',okCount+'/'+line.stations.length+' stations','ok');
+        return okCount;
+    });
+}
+
+function renderTimes(tid,did,times,side){
+    var te=$(tid),de=$(did);if(!te||!de)return;
+    if(!times.length){te.innerHTML='<span class="no-data">—</span>';de.classList.remove('active');return;}
+    te.innerHTML=times.slice(0,2).map(function(t){
+        var c=t.min<=1?'now':t.min<=5?'soon':'later';
+        var label=t.min<=0?'⇢':t.min+"'";
+        // Short destination
+        var shortDest=t.dest.length>12?t.dest.substring(0,11)+'…':t.dest;
+        return '<span class="time-chip '+c+'">'+label+'<span class="dest-hint">'+shortDest+'</span></span>';
+    }).join('');
+    de.classList.toggle('active',times[0].min<=1);
+}
+
+/* ── Countdown timer (update every 10s) ── */
+var countdownTimer=null;
+function startCountdown(){
+    if(countdownTimer)clearInterval(countdownTimer);
+    countdownTimer=setInterval(function(){
+        var line=LINES[currentLine];
+        line.stations.forEach(function(name,i){
+            var d=stationData[name.toLowerCase()];
+            if(!d)return;
+            // Decrement displayed times
+            d.left.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
+            d.right.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
+        });
+        // Re-render times without API call
+        line.stations.forEach(function(name,i){
+            var d=stationData[name.toLowerCase()];
+            if(d && (d.left.length||d.right.length)){
+                renderTimes('tl-'+i,'dl-'+i,d.left,'left');
+                renderTimes('tr-'+i,'dr-'+i,d.right,'right');
+            }
+        });
+    },10000);
+}
+
+/* ── Line switch ── */
+window.selectLine=function(line,btn){
+    if(line===currentLine&&$('stationsList').childNodes.length>0)return;
+    currentLine=line;
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+    btn.classList.add('active');
+    var info=LINES[line];
+    $('dirLeft').textContent='← '+info.leftDir;
+    $('dirRight').textContent=info.rightDir+' →';
+    $('legendRight').textContent=info.rightDir+' →';
+    $('trafficBanner').classList.remove('show');
+    buildStations(); refreshData(); fetchTrafficInfo();
+    if(geoActive && geoWatchId!==null){
+        navigator.geolocation.getCurrentPosition(onGeoPos,function(){},{maximumAge:15000});
     }
+};
+
+window.refreshData=function(){
+    if(isLoading)return; isLoading=true;
+    $('refreshBtn').classList.add('loading');
+    fetchAllTimes().then(function(ok){
+        $('stationsList').style.display='block';
+        $('stateContainer').style.display='none';
+        $('noService').classList.toggle('show',ok===0);
+        $('liveDot').classList.toggle('offline',ok===0);
+        $('updateInfo').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+        startCountdown();
+    }).catch(function(e){
+        logConn('err',e.message,'err');
+        $('updateInfo').textContent='Erreur';
+        $('liveDot').classList.add('offline');
+    }).finally(function(){isLoading=false;$('refreshBtn').classList.remove('loading');});
+};
+
+function fetchTrafficInfo(){
+    workerFetch(WORKER+'?method=etat').then(function(data){
+        if(!data.ok||!data.objets)return;
+        var lineId=LINES[currentLine].id;
+        var etat=data.objets.find(function(e){return e.idLigne===lineId;});
+        if(etat&&etat.etat>0&&etat.etat!==4){
+            var msgs={1:'Perturbation mineure',2:'Perturbation modérée',3:'Perturbation majeure',5:'Service interrompu',6:'Service non assuré'};
+            $('trafficText').innerHTML='<strong>'+(etat.numLignePublic||currentLine)+'</strong> — '+(msgs[etat.etat]||'État '+etat.etat);
+            $('trafficBanner').classList.add('show');
+        } else { $('trafficBanner').classList.remove('show'); }
+    }).catch(function(){});
+}
+
+function init(){
+    logConn('info','<b>v16</b> — TR/getListeTemps + favoris + géoloc','');
+    renderFavBar();
+    var testUrl=WORKER+'?method=temps&nom='+encodeURIComponent('République')+'&ligne=101&sens=false&nb=3';
+    workerFetch(testUrl).then(function(data){
+        if(!data.ok)throw new Error(data.msg);
+        var nb=0; if(data.objets)data.objets.forEach(function(l){nb+=(l.listeTemps||[]).length;});
+        logConn('ok','API OK — '+nb+' passages test','ok');
+    }).catch(function(e){logConn('err',e.message,'err');}).then(function(){
+        buildStations(); refreshData(); fetchTrafficInfo();
+        if(refreshTimer)clearInterval(refreshTimer);
+        refreshTimer=setInterval(refreshData,REFRESH);
+        setInterval(fetchTrafficInfo,120000);
+    });
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+
+// PWA Service Worker
+if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+}
 })();
 </script>
 </body>
