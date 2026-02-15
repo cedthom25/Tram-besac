@@ -152,17 +152,16 @@
         /* Trim first/last */
         .s-row.first-row .track::before { top:50%; }
         .s-row.last-row .track::before { bottom:50%; }
-        /* Direction arrows */
+        /* Direction arrows on all tracks */
         .track::after {
             position:absolute; left:50%; transform:translateX(-50%);
-            font-size:6px; z-index:3; opacity:.35;
-            display:none;
+            font-size:5px; z-index:3; opacity:.3;
         }
-        .s-row.first-row .track.left::after {
-            content:'▲'; display:block; top:2px; color:var(--left);
+        .track.left::after {
+            content:'▲'; top:3px; color:var(--left);
         }
-        .s-row.last-row .track.right::after {
-            content:'▼'; display:block; bottom:2px; color:var(--right);
+        .track.right::after {
+            content:'▼'; bottom:3px; color:var(--right);
         }
         .dot {
             position:absolute; top:50%; left:50%;
@@ -378,14 +377,11 @@ function findStation(name){
     var n=norm(name);
     if(stationData[n])return stationData[n];
     var keys=Object.keys(stationData);
-    // Try "commune - name" pattern (API prefixes commune)
+    // Try: API key ends with our name (handles "commune name" prefix)
     for(var k=0;k<keys.length;k++){
         var key=keys[k];
-        if(key.indexOf(' - '+n)>=0) return stationData[key];
-    }
-    // Try if name contains API key
-    for(var k=0;k<keys.length;k++){
-        if(n.indexOf(keys[k])>=0) return stationData[keys[k]];
+        // key ends with n, preceded by space or start
+        if(key.length>n.length && key.substring(key.length-n.length)===n && key.charAt(key.length-n.length-1)===' ') return stationData[key];
     }
     return null;
 }
