@@ -152,6 +152,18 @@
         /* Trim first/last */
         .s-row.first-row .track::before { top:50%; }
         .s-row.last-row .track::before { bottom:50%; }
+        /* Direction arrows */
+        .track::after {
+            position:absolute; left:50%; transform:translateX(-50%);
+            font-size:6px; z-index:3; opacity:.35;
+            display:none;
+        }
+        .s-row.first-row .track.left::after {
+            content:'▲'; display:block; top:2px; color:var(--left);
+        }
+        .s-row.last-row .track.right::after {
+            content:'▼'; display:block; bottom:2px; color:var(--right);
+        }
         .dot {
             position:absolute; top:50%; left:50%;
             transform:translate(-50%,-50%);
@@ -361,7 +373,22 @@ var LINES={
 var currentLine='T1', refreshTimer=null, isLoading=false, logOpen=false;
 var stationData={}, openDetail=-1, nearestIdx=-1, geoActive=false, geoWatchId=null;
 var $=function(id){return document.getElementById(id);};
-function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/-/g,' ').trim();}
+function findStation(name){
+    var n=norm(name);
+    if(stationData[n])return stationData[n];
+    var keys=Object.keys(stationData);
+    // Try "commune - name" pattern (API prefixes commune)
+    for(var k=0;k<keys.length;k++){
+        var key=keys[k];
+        if(key.indexOf(' - '+n)>=0) return stationData[key];
+    }
+    // Try if name contains API key
+    for(var k=0;k<keys.length;k++){
+        if(n.indexOf(keys[k])>=0) return stationData[keys[k]];
+    }
+    return null;
+}
 
 /* ── Favorites ── */
 function getFavs(){try{return JSON.parse(localStorage.getItem('ginko-favs'))||[];}catch(e){return [];}}
@@ -377,7 +404,7 @@ function renderFavBar(){
     if(!f.length){bar.classList.remove('show');return;}
     bar.classList.add('show'); chips.innerHTML='';
     f.forEach(function(name){
-        var d=stationData[norm(name)],times=[];
+        var d=findStation(name),times=[];
         if(d){d.left.concat(d.right).forEach(function(t){times.push(t.min);});times.sort(function(a,b){return a-b;});}
         var chip=document.createElement('div');chip.className='fav-chip';
         chip.onclick=function(){scrollToStation(name);};
@@ -475,7 +502,7 @@ function toggleDetail(idx){
 }
 
 function renderDetail(idx){
-    var line=LINES[currentLine],name=line.stations[idx],d=stationData[norm(name)];
+    var line=LINES[currentLine],name=line.stations[idx],d=findStation(name);
     var inner=$('di-'+idx);if(!inner)return;
     var fav=isFav(name),html='';
     html+='<div class="detail-section"><div class="detail-label">← '+line.leftDir+'</div>';
@@ -525,7 +552,7 @@ function fetchAllTimes(){
         logConn('info','API keys: '+apiKeys.join(', '),'dim');
         var okCount=0;
         line.stations.forEach(function(name,i){
-            var d=stationData[norm(name)];
+            var d=findStation(name);
             if(d&&(d.left.length||d.right.length)){
                 d.left.sort(function(a,b){return a.min-b.min;});
                 d.right.sort(function(a,b){return a.min-b.min;});
@@ -565,12 +592,12 @@ function startCountdown(){
     countdownTimer=setInterval(function(){
         var line=LINES[currentLine];
         line.stations.forEach(function(name){
-            var d=stationData[norm(name)];if(!d)return;
+            var d=findStation(name);if(!d)return;
             d.left.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
             d.right.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
         });
         line.stations.forEach(function(name,i){
-            var d=stationData[norm(name)];
+            var d=findStation(name);
             if(d&&(d.left.length||d.right.length)){renderTimes('tl-'+i,'dl-'+i,d.left);renderTimes('tr-'+i,'dr-'+i,d.right);}
         });
     },10000);
