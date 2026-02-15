@@ -361,6 +361,7 @@ var LINES={
 var currentLine='T1', refreshTimer=null, isLoading=false, logOpen=false;
 var stationData={}, openDetail=-1, nearestIdx=-1, geoActive=false, geoWatchId=null;
 var $=function(id){return document.getElementById(id);};
+function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
 
 /* ── Favorites ── */
 function getFavs(){try{return JSON.parse(localStorage.getItem('ginko-favs'))||[];}catch(e){return [];}}
@@ -376,11 +377,11 @@ function renderFavBar(){
     if(!f.length){bar.classList.remove('show');return;}
     bar.classList.add('show'); chips.innerHTML='';
     f.forEach(function(name){
-        var d=stationData[name.toLowerCase()],times=[];
+        var d=stationData[norm(name)],times=[];
         if(d){d.left.concat(d.right).forEach(function(t){times.push(t.min);});times.sort(function(a,b){return a-b;});}
         var chip=document.createElement('div');chip.className='fav-chip';
         chip.onclick=function(){scrollToStation(name);};
-        var tStr=times.length?times.slice(0,2).map(function(t){return t<=0?'⇢':t+"'";}).join(' '):'—';
+        var tStr=times.length?times.slice(0,2).map(function(t){return t<=0?'⇢':Math.round(t)+"'";}).join(' '):'—';
         chip.innerHTML=name+'<span class="fc-times'+(times.length?'':' empty')+'">'+tStr+'</span>';
         chips.appendChild(chip);
     });
@@ -419,8 +420,6 @@ function onGeoPos(pos){
     document.querySelectorAll('.s-row').forEach(function(r,i){r.classList.toggle('nearest',i===bestIdx);});
     if(bestIdx>=0){
         logConn('ok','Station proche: '+line.stations[bestIdx]+' ('+Math.round(bestDist)+'m)','ok');
-        var row=$('sr-'+bestIdx);
-        if(row)row.scrollIntoView({behavior:'smooth',block:'center'});
     }
 }
 function onGeoErr(e){logConn('warn','Géoloc: '+e.message,'warn');}
@@ -476,13 +475,13 @@ function toggleDetail(idx){
 }
 
 function renderDetail(idx){
-    var line=LINES[currentLine],name=line.stations[idx],d=stationData[name.toLowerCase()];
+    var line=LINES[currentLine],name=line.stations[idx],d=stationData[norm(name)];
     var inner=$('di-'+idx);if(!inner)return;
     var fav=isFav(name),html='';
     html+='<div class="detail-section"><div class="detail-label">← '+line.leftDir+'</div>';
     if(d&&d.left.length){d.left.forEach(function(t){
         var cls=t.min<=1?'now':t.min<=5?'soon':'later';
-        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':Math.round(t.min)+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
         html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
         if(t.charge>=0){var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';html+='<span class="dr-badge '+cc+'">'+cl+'</span>';}
         html+='</div>';
@@ -491,7 +490,7 @@ function renderDetail(idx){
     html+='<div class="detail-section"><div class="detail-label">'+line.rightDir+' →</div>';
     if(d&&d.right.length){d.right.forEach(function(t){
         var cls=t.min<=1?'now':t.min<=5?'soon':'later';
-        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':t.min+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':Math.round(t.min)+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
         html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
         if(t.charge>=0){var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';html+='<span class="dr-badge '+cc+'">'+cl+'</span>';}
         html+='</div>';
@@ -513,7 +512,7 @@ function fetchAllTimes(){
         function processDir(dir,side){
             if(!dir||!dir.ok||!dir.objets)return;
             dir.objets.forEach(function(lieu){
-                var key=lieu.nomExact.toLowerCase();
+                var key=norm(lieu.nomExact);
                 if(!stationData[key])stationData[key]={left:[],right:[]};
                 (lieu.listeTemps||[]).forEach(function(t){
                     stationData[key][side].push({min:t.tempsEnMinute,dest:t.destination||'?',fiable:t.fiable!==false,charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1});
@@ -522,9 +521,11 @@ function fetchAllTimes(){
         }
         processDir(data.aller,'right');
         processDir(data.retour,'left');
+        var apiKeys=Object.keys(stationData);
+        logConn('info','API keys: '+apiKeys.join(', '),'dim');
         var okCount=0;
         line.stations.forEach(function(name,i){
-            var d=stationData[name.toLowerCase()];
+            var d=stationData[norm(name)];
             if(d&&(d.left.length||d.right.length)){
                 d.left.sort(function(a,b){return a.min-b.min;});
                 d.right.sort(function(a,b){return a.min-b.min;});
@@ -533,7 +534,11 @@ function fetchAllTimes(){
                 var n=$('sn-'+i);
                 if(n)n.classList.toggle('highlight',!!(d.left.length&&d.left[0].min<=1)||!!(d.right.length&&d.right[0].min<=1));
                 okCount++;
-            }else{renderTimes('tl-'+i,'dl-'+i,[]);renderTimes('tr-'+i,'dr-'+i,[]);}
+            }else{
+                renderTimes('tl-'+i,'dl-'+i,[]);renderTimes('tr-'+i,'dr-'+i,[]);
+                var nn=norm(name),close=apiKeys.filter(function(k){return k.indexOf(nn)>=0||nn.indexOf(k)>=0;});
+                logConn('warn','∅ "'+name+'" → "'+nn+'"'+(close.length?' ~ API: "'+close.join('","')+'"':' (aucun match API)'),'warn');
+            }
             if(openDetail===i)renderDetail(i);
         });
         renderFavBar();
@@ -546,7 +551,7 @@ function renderTimes(tid,did,times){
     if(!times.length){te.innerHTML='<span class="no-data">—</span>';de.classList.remove('active');return;}
     te.innerHTML=times.slice(0,2).map(function(t){
         var c=t.min<=1?'now':t.min<=5?'soon':'later';
-        var label=t.min<=0?'⇢':t.min+"'";
+        var label=t.min<=1?'⇢':Math.round(t.min)+"'";
         var sd=t.dest.length>12?t.dest.substring(0,11)+'…':t.dest;
         return '<span class="time-chip '+c+'">'+label+'<span class="dest-hint">'+sd+'</span></span>';
     }).join('');
@@ -560,12 +565,12 @@ function startCountdown(){
     countdownTimer=setInterval(function(){
         var line=LINES[currentLine];
         line.stations.forEach(function(name){
-            var d=stationData[name.toLowerCase()];if(!d)return;
+            var d=stationData[norm(name)];if(!d)return;
             d.left.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
             d.right.forEach(function(t){if(t.min>0)t.min=Math.max(0,t.min-1/6);});
         });
         line.stations.forEach(function(name,i){
-            var d=stationData[name.toLowerCase()];
+            var d=stationData[norm(name)];
             if(d&&(d.left.length||d.right.length)){renderTimes('tl-'+i,'dl-'+i,d.left);renderTimes('tr-'+i,'dr-'+i,d.right);}
         });
     },10000);
