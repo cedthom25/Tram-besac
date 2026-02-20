@@ -55,19 +55,20 @@
         .app { position:relative; z-index:1; max-width:520px; margin:0 auto; padding-bottom:env(safe-area-inset-bottom,20px); }
 
         /* ── Header ── */
-        .header { padding:20px 16px 0; display:flex; align-items:center; justify-content:space-between; }
+        .header { padding:16px 16px 12px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50; background:var(--bg); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
         .brand { display:flex; align-items:center; gap:10px; }
         .brand-icon { width:34px; height:34px; background:linear-gradient(135deg,var(--green),#00b87a); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:17px; box-shadow:0 4px 16px var(--green-glow); }
         .brand h1 { font-size:1.05rem; font-weight:700; letter-spacing:-0.03em; line-height:1.1; }
         .brand .sub { font-size:0.6rem; color:var(--text2); font-weight:400; letter-spacing:0.02em; }
-        .header-right { display:flex; align-items:center; gap:10px; }
+        .header-right { display:flex; align-items:center; gap:6px; }
         .live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green-glow); animation:pulse 2.5s ease-in-out infinite; }
         .live-dot.offline { background:var(--text3); box-shadow:none; animation:none; }
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.5;transform:scale(.85);} }
         .update-time { font-family:'Space Mono',monospace; font-size:.65rem; color:var(--text2); }
-        .geo-btn { background:none; border:1px solid var(--border); border-radius:8px; padding:6px 8px; color:var(--text2); cursor:pointer; font-size:.75rem; transition:all .2s; }
-        .geo-btn:hover { border-color:var(--border2); color:var(--text); }
-        .geo-btn.active { border-color:rgba(0,224,158,.3); color:var(--green); background:var(--green-dim); }
+        .hdr-btn { background:none; border:1px solid var(--border); border-radius:8px; padding:6px 8px; color:var(--text2); cursor:pointer; font-size:.65rem; transition:all .2s; text-decoration:none; display:flex; align-items:center; gap:3px; font-family:inherit; }
+        .hdr-btn:hover { border-color:var(--border2); color:var(--text); }
+        .hdr-btn.active { border-color:rgba(0,224,158,.3); color:var(--green); background:var(--green-dim); }
+        .hdr-btn.info { border-color:rgba(255,107,107,.2); color:var(--red); font-weight:500; }
 
         /* ── Favorites bar ── */
         .fav-bar { padding:12px 16px 0; display:none; }
@@ -75,10 +76,17 @@
         .fav-bar-title { font-size:.6rem; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; font-weight:600; }
         .fav-chips { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:4px; }
         .fav-chips::-webkit-scrollbar { display:none; }
-        .fav-chip { flex-shrink:0; padding:6px 12px; background:var(--card); border:1px solid var(--border); border-radius:20px; font-size:.7rem; font-weight:500; color:var(--text2); cursor:pointer; transition:all .2s; white-space:nowrap; }
+        .fav-chip { flex-shrink:0; padding:6px 10px; background:var(--card); border:1px solid var(--border); border-radius:20px; font-size:.7rem; font-weight:500; color:var(--text2); cursor:pointer; transition:all .2s; white-space:nowrap; display:flex; align-items:center; gap:5px; }
         .fav-chip:hover { border-color:var(--border2); color:var(--text); }
-        .fav-chip .fc-times { font-family:'Space Mono',monospace; font-weight:700; color:var(--green); margin-left:4px; }
-        .fav-chip .fc-times.empty { color:var(--text3); }
+        .fav-chip .fc-name { color:var(--text); }
+        .fav-chip .fc-time { font-family:'Space Mono',monospace; font-size:.6rem; font-weight:700; padding:1px 4px; border-radius:3px; }
+        .fav-chip .fc-time.now { background:var(--green); color:var(--bg); }
+        .fav-chip .fc-time.soon { background:rgba(255,179,71,.15); color:var(--amber); }
+        .fav-chip .fc-time.later { background:rgba(255,255,255,.04); color:var(--text2); }
+        .fav-chip .fc-dir { font-size:.5rem; font-weight:600; opacity:.6; }
+        .fav-chip .fc-dir.left { color:var(--left); }
+        .fav-chip .fc-dir.right { color:var(--right); }
+        .fav-chip .fc-empty { font-size:.6rem; color:var(--text3); }
 
         /* ── Tabs ── */
         .tabs { display:flex; gap:8px; padding:14px 16px 0; }
@@ -282,7 +290,8 @@
             <div><h1>Ginko Tram</h1><div class="sub">Besançon — temps réel</div></div>
         </div>
         <div class="header-right">
-            <button class="geo-btn" id="geoBtn" onclick="toggleGeo()" title="Me localiser">📍</button>
+            <a class="hdr-btn info" href="https://www.ginko.voyage/info-trafic" target="_blank" title="Info trafic">⚠ Info trafic</a>
+            <button class="hdr-btn" id="geoBtn" onclick="toggleGeo()" title="Me localiser">📍</button>
             <div class="live-dot" id="liveDot"></div>
             <span class="update-time" id="updateInfo">—</span>
         </div>
@@ -372,7 +381,7 @@ var LINES={
 var currentLine='T1', refreshTimer=null, isLoading=false, logOpen=false;
 var stationData={}, openDetail=-1, nearestIdx=-1, geoActive=false, geoWatchId=null;
 var $=function(id){return document.getElementById(id);};
-function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/-/g,' ').trim();}
+function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[-\s]+/g,' ').trim();}
 function findStation(name){
     var n=norm(name);
     if(stationData[n])return stationData[n];
@@ -399,13 +408,25 @@ function renderFavBar(){
     var f=getFavs(),bar=$('favBar'),chips=$('favChips');
     if(!f.length){bar.classList.remove('show');return;}
     bar.classList.add('show'); chips.innerHTML='';
+    var line=LINES[currentLine];
+    var lShort=line.leftDir.length>10?line.leftDir.substring(0,8)+'…':line.leftDir;
+    var rShort=line.rightDir.length>10?line.rightDir.substring(0,8)+'…':line.rightDir;
     f.forEach(function(name){
-        var d=findStation(name),times=[];
-        if(d){d.left.concat(d.right).forEach(function(t){times.push(t.min);});times.sort(function(a,b){return a-b;});}
+        var d=findStation(name);
         var chip=document.createElement('div');chip.className='fav-chip';
         chip.onclick=function(){scrollToStation(name);};
-        var tStr=times.length?times.slice(0,2).map(function(t){return t<=0?'⇢':Math.round(t)+"'";}).join(' '):'—';
-        chip.innerHTML=name+'<span class="fc-times'+(times.length?'':' empty')+'">'+tStr+'</span>';
+        var html='<span class="fc-name">'+name+'</span> ';
+        if(d && (d.left.length||d.right.length)){
+            if(d.left.length){
+                var t=d.left[0], m=Math.round(t.min), cls=m<=1?'now':m<=5?'soon':'later';
+                html+='<span class="fc-dir left">←'+lShort+'</span><span class="fc-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span> ';
+            }
+            if(d.right.length){
+                var t=d.right[0], m=Math.round(t.min), cls=m<=1?'now':m<=5?'soon':'later';
+                html+='<span class="fc-dir right">'+rShort+'→</span><span class="fc-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span>';
+            }
+        } else { html+='<span class="fc-empty">—</span>'; }
+        chip.innerHTML=html;
         chips.appendChild(chip);
     });
 }
