@@ -557,9 +557,15 @@ function fetchAllTimes(){
             if(!dir||!dir.ok||!dir.objets)return;
             dir.objets.forEach(function(lieu){
                 var key=norm(lieu.nomExact);
+                // Also extract short name after " - " (API prefixes commune)
+                var parts=lieu.nomExact.split(/\s*-\s*/);
+                var shortKey=norm(parts[parts.length-1]);
                 if(!stationData[key])stationData[key]={left:[],right:[]};
+                if(shortKey!==key){if(!stationData[shortKey])stationData[shortKey]={left:[],right:[]};}
                 (lieu.listeTemps||[]).forEach(function(t){
-                    stationData[key][side].push({min:t.tempsEnMinute,dest:t.destination||'?',fiable:t.fiable!==false,charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1});
+                    var entry={min:t.tempsEnMinute,dest:t.destination||'?',fiable:t.fiable!==false,charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1};
+                    stationData[key][side].push(entry);
+                    if(shortKey!==key) stationData[shortKey][side].push(entry);
                 });
             });
         }
