@@ -11,6 +11,8 @@
     <title>Ginko Tram — Besançon</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <style>
         :root {
             --bg: #0a0a0f;
@@ -280,6 +282,63 @@
         }
         .s-row { animation:row-in .3s ease-out both; }
         @keyframes row-in { from{opacity:0;transform:translateY(5px);} to{opacity:1;transform:translateY(0);} }
+
+        /* ── Map View ── */
+        .map-view { display:none; position:relative; }
+        .map-view.active { display:block; }
+        .list-view.hidden { display:none; }
+        #tramMap { width:100%; height:calc(100dvh - 70px); border-radius:0; }
+        .map-legend {
+            position:absolute; bottom:20px; left:10px; z-index:1000;
+            background:rgba(10,10,15,.9); backdrop-filter:blur(8px);
+            border:1px solid var(--border); border-radius:var(--radius-sm);
+            padding:8px 12px; font-size:.6rem; color:var(--text2);
+        }
+        .map-legend .ml-row { display:flex; align-items:center; gap:6px; padding:2px 0; }
+        .map-legend .ml-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+        /* Leaflet custom markers */
+        .tram-marker {
+            background:none; border:none;
+        }
+        .tram-icon {
+            width:28px; height:28px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-size:14px; color:#fff; font-weight:700;
+            box-shadow:0 2px 8px rgba(0,0,0,.4);
+            border:2px solid #fff;
+            transition:transform .3s;
+        }
+        .tram-icon.t1 { background:var(--t1); }
+        .tram-icon.t2 { background:var(--t2); }
+        .tram-icon:hover { transform:scale(1.2); }
+
+        .station-marker {
+            background:none; border:none;
+        }
+        .station-icon {
+            width:10px; height:10px; border-radius:50%;
+            background:var(--card); border:2px solid var(--text2);
+            box-shadow:0 1px 4px rgba(0,0,0,.3);
+        }
+        .station-icon.active { background:var(--green); border-color:var(--green); width:14px; height:14px; box-shadow:0 0 10px var(--green-glow); }
+
+        .leaflet-popup-content-wrapper {
+            background:var(--card) !important; color:var(--text) !important;
+            border:1px solid var(--border) !important; border-radius:var(--radius-sm) !important;
+            font-family:'Outfit',sans-serif !important;
+        }
+        .leaflet-popup-tip { background:var(--card) !important; }
+        .leaflet-popup-content { font-size:.75rem !important; margin:8px 12px !important; }
+        .leaflet-popup-content .pop-name { font-weight:700; font-size:.8rem; margin-bottom:4px; }
+        .leaflet-popup-content .pop-dir { font-size:.6rem; color:var(--text2); }
+        .leaflet-popup-content .pop-time { font-family:'Space Mono',monospace; font-weight:700; }
+        .leaflet-popup-content .pop-time.now { color:var(--green); }
+        .leaflet-popup-content .pop-time.soon { color:var(--amber); }
+        .leaflet-popup-content .pop-time.later { color:var(--text2); }
+
+        .hdr-btn.view-toggle { font-weight:600; }
+        .hdr-btn.view-toggle .vt-icon { font-size:.8rem; }
     </style>
 </head>
 <body>
@@ -291,6 +350,7 @@
         </div>
         <div class="header-right">
             <a class="hdr-btn info" href="https://www.ginko.voyage/info-trafic" target="_blank" title="Info trafic">⚠ Info trafic</a>
+            <button class="hdr-btn view-toggle" id="viewToggle" onclick="toggleMapView()" title="Carte"><span class="vt-icon">🗺</span></button>
             <button class="hdr-btn" id="geoBtn" onclick="toggleGeo()" title="Me localiser">📍</button>
             <div class="live-dot" id="liveDot"></div>
             <span class="update-time" id="updateInfo">—</span>
@@ -341,6 +401,16 @@
         <div class="legend-item"><div class="legend-dot b"></div><span id="legendRight">Est →</span></div>
     </div>
     <div class="credits">Données <a href="https://opendata.besancon.fr" target="_blank">Ginko / Besançon Mobilités</a></div>
+
+    <div class="map-view" id="mapView">
+        <div id="tramMap"></div>
+        <div class="map-legend">
+            <div class="ml-row"><div class="ml-dot" style="background:var(--t1)"></div> Tram T1</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> Tram T2</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
+        </div>
+    </div>
 
     <div class="conn-log" id="connLog">
         <div class="conn-log-inner">
@@ -684,6 +754,153 @@ function init(){
         if(refreshTimer)clearInterval(refreshTimer);
         refreshTimer=setInterval(refreshData,REFRESH);
         setInterval(fetchTrafficInfo,120000);
+    });
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(function(){});}
+
+/* ══════════════════════════════════════════
+   MAP VIEW
+   ══════════════════════════════════════════ */
+var mapInstance=null, mapActive=false, mapPositionTimer=null;
+var vehicleMarkers=[], stationMarkers=[];
+var listElements=['favBar','tabs-wrap','trafficBanner','dirBar-wrap','stateContainer','stationsWrapOuter','noService','controlsWrap','legendWrap','creditsWrap'];
+
+window.toggleMapView=function(){
+    mapActive=!mapActive;
+    var mv=$('mapView'), toggle=$('viewToggle');
+    // Toggle list elements
+    var app=document.querySelector('.app');
+    var children=app.children;
+    for(var i=0;i<children.length;i++){
+        var el=children[i];
+        if(el.id==='mapView'||el.classList.contains('header')||el.id==='connLog') continue;
+        el.style.display=mapActive?'none':'';
+    }
+    mv.classList.toggle('active',mapActive);
+    toggle.innerHTML=mapActive?'<span class="vt-icon">📋</span>':'<span class="vt-icon">🗺</span>';
+    toggle.title=mapActive?'Liste':'Carte';
+
+    if(mapActive){
+        if(!mapInstance) initMap();
+        setTimeout(function(){mapInstance.invalidateSize();},100);
+        fetchPositions();
+        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,15000);
+    } else {
+        if(mapPositionTimer){clearInterval(mapPositionTimer);mapPositionTimer=null;}
+    }
+};
+
+function initMap(){
+    // Dark tile layer
+    mapInstance=L.map('tramMap',{
+        center:[47.2400,6.0210],
+        zoom:13,
+        zoomControl:true,
+        attributionControl:true
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+        attribution:'&copy; <a href="https://osm.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains:'abcd',
+        maxZoom:19
+    }).addTo(mapInstance);
+
+    // Draw T1 line
+    var t1Coords=LINES.T1.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
+    L.polyline(t1Coords,{color:'#00A5C2',weight:4,opacity:.6,dashArray:null}).addTo(mapInstance);
+
+    // Draw T2 line (diverges at Parc Micaud)
+    var t2Coords=LINES.T2.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
+    L.polyline(t2Coords,{color:'#006D78',weight:4,opacity:.6,dashArray:'8 6'}).addTo(mapInstance);
+
+    // Station markers
+    var allStations={};
+    LINES.T1.stations.forEach(function(n){allStations[n]=true;});
+    LINES.T2.stations.forEach(function(n){allStations[n]=true;});
+    Object.keys(allStations).forEach(function(name){
+        var c=COORDS[name]; if(!c) return;
+        var marker=L.marker([c[0],c[1]],{
+            icon:L.divIcon({className:'station-marker',html:'<div class="station-icon" id="sm-'+norm(name)+'"></div>',iconSize:[10,10],iconAnchor:[5,5]})
+        }).addTo(mapInstance);
+        marker.bindPopup('<div class="pop-name">'+name+'</div><div class="pop-times" id="mp-'+norm(name)+'">Chargement…</div>');
+        marker.on('click',function(){updatePopup(name,marker);});
+        stationMarkers.push({name:name,marker:marker});
+    });
+
+    // Fit bounds
+    var allCoords=t1Coords.concat(t2Coords);
+    if(allCoords.length) mapInstance.fitBounds(L.latLngBounds(allCoords).pad(0.05));
+}
+
+function updatePopup(name,marker){
+    var d=findStation(name);
+    var el=document.getElementById('mp-'+norm(name));
+    if(!el) return;
+    var line=LINES[currentLine];
+    var html='';
+    if(d){
+        if(d.left.length){
+            html+='<div class="pop-dir">← '+line.leftDir+'</div>';
+            d.left.slice(0,2).forEach(function(t){
+                var m=Math.round(t.min),cls=m<=1?'now':m<=5?'soon':'later';
+                html+='<span class="pop-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span> ';
+            });
+            html+='<br>';
+        }
+        if(d.right.length){
+            html+='<div class="pop-dir">'+line.rightDir+' →</div>';
+            d.right.slice(0,2).forEach(function(t){
+                var m=Math.round(t.min),cls=m<=1?'now':m<=5?'soon':'later';
+                html+='<span class="pop-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span> ';
+            });
+        }
+    }
+    if(!html) html='<span style="color:var(--text3)">Aucun passage</span>';
+    el.innerHTML=html;
+}
+
+function fetchPositions(){
+    // Fetch T1 and T2 positions
+    Promise.all([
+        workerFetch(WORKER+'?method=positions&ligne=101').catch(function(){return null;}),
+        workerFetch(WORKER+'?method=positions&ligne=102').catch(function(){return null;})
+    ]).then(function(results){
+        // Clear old markers
+        vehicleMarkers.forEach(function(m){mapInstance.removeLayer(m);});
+        vehicleMarkers=[];
+
+        var lines=[{data:results[0],cls:'t1',label:'T1'},{data:results[1],cls:'t2',label:'T2'}];
+        lines.forEach(function(l){
+            if(!l.data||!l.data.ok||!l.data.objets) return;
+            (Array.isArray(l.data.objets)?l.data.objets:[l.data.objets]).forEach(function(v){
+                if(!v.latitude||!v.longitude) return;
+                var lat=parseFloat(v.latitude), lng=parseFloat(v.longitude);
+                if(isNaN(lat)||isNaN(lng)) return;
+                var dest=v.destination||v.directionCommerciale||'?';
+                var charge=typeof v.tauxDeCharge==='number'?v.tauxDeCharge:-1;
+                var chargeLabel=charge<0?'':charge<30?' · Peu fréquenté':charge<70?' · Modéré':' · Très fréquenté';
+                var icon=L.divIcon({
+                    className:'tram-marker',
+                    html:'<div class="tram-icon '+l.cls+'">'+l.label+'</div>',
+                    iconSize:[28,28],iconAnchor:[14,14]
+                });
+                var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
+                m.bindPopup('<div class="pop-name">'+l.label+' → '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
+                vehicleMarkers.push(m);
+            });
+        });
+        logConn('ok','Carte: '+vehicleMarkers.length+' véhicules','ok');
+    });
+
+    // Update station icons (active = tram imminent)
+    stationMarkers.forEach(function(s){
+        var d=findStation(s.name);
+        var hasImm=d&&((d.left.length&&d.left[0].min<=1)||(d.right.length&&d.right[0].min<=1));
+        var iconEl=document.getElementById('sm-'+norm(s.name));
+        if(iconEl) iconEl.classList.toggle('active',!!hasImm);
     });
 }
 
