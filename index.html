@@ -442,7 +442,7 @@
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
-            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v35 · <span id="vehicleCount">…</span></div>
+            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v36 · <span id="vehicleCount">…</span></div>
         </div>
     </div>
 
@@ -977,7 +977,7 @@ function fetchPositions(){
             if(!r){logConn('warn','Positions T'+(i+1)+': null/erreur réseau','warn');return;}
             var keys=r?Object.keys(r).join(','):'null';
             logConn('info','Positions T'+(i+1)+' keys: '+keys,'dim');
-            // Show worker debug attempts
+            if(r.msg) logConn('warn','T'+(i+1)+' msg: '+r.msg,'warn');
             if(r._debug){
                 r._debug.forEach(function(a){
                     var msg='  → '+a.path+' '+(a.error?'❌ '+a.error:(a.count!==undefined?'✓ '+a.count+' véhicules':'∅'));
