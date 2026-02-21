@@ -299,11 +299,13 @@
 
         /* Leaflet custom markers */
         .tram-marker {
-            background:none; border:none;
+            background:none !important; border:none !important;
+            overflow:visible !important;
+            display:flex; align-items:center; justify-content:center;
         }
         .tram-icon {
             position:relative;
-            display:flex; align-items:center; gap:2px;
+            display:inline-flex; align-items:center; gap:2px;
             padding:2px 7px;
             border-radius:14px;
             font-size:11px; color:#fff; font-weight:700;
@@ -972,7 +974,7 @@ function fetchPositions(){
                 var icon=L.divIcon({
                     className:'tram-marker',
                     html:html,
-                    iconSize:[0,0],iconAnchor:[0,10]
+                    iconSize:[100,24],iconAnchor:[50,12]
                 });
                 var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
                 m.bindPopup('<div class="pop-name">'+l.label+' '+arrow+' '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
