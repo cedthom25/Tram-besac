@@ -435,14 +435,12 @@
     <div class="map-view" id="mapView">
         <div id="tramMap"></div>
         <div class="map-legend">
-            <div class="ml-row"><div class="ml-dot" style="background:#FF8C00"></div> ← vers Hauts du Chazal</div>
-            <div class="ml-row"><div class="ml-dot" style="background:#4A9FFF"></div> → vers Chalez. / Viotte</div>
-            <div class="ml-row"><div class="ml-dot" style="background:var(--t1)"></div> Tram T1</div>
-            <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> Tram T2</div>
+            <div class="ml-row"><div class="ml-dot" style="background:#00A5C2"></div> T1 · ← HdC · → Chalez.</div>
+            <div class="ml-row"><div class="ml-dot" style="background:#006D78"></div> T2 · ← HdC · → Viotte</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
-            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v36 · <span id="vehicleCount">…</span></div>
+            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v38 · <span id="vehicleCount">…</span></div>
         </div>
     </div>
 
@@ -964,79 +962,100 @@ function updatePopup(name,marker){
 }
 
 function fetchPositions(){
-    Promise.all([
-        workerFetch(WORKER+'?method=positions&ligne=101').catch(function(){return null;}),
-        workerFetch(WORKER+'?method=positions&ligne=102').catch(function(){return null;})
-    ]).then(function(results){
-        // Clear old markers
-        vehicleMarkers.forEach(function(m){mapInstance.removeLayer(m);});
-        vehicleMarkers=[];
+    // Clear old markers
+    vehicleMarkers.forEach(function(m){mapInstance.removeLayer(m);});
+    vehicleMarkers=[];
 
-        // Debug: log raw response structure
-        results.forEach(function(r,i){
-            if(!r){logConn('warn','Positions T'+(i+1)+': null/erreur réseau','warn');return;}
-            var keys=r?Object.keys(r).join(','):'null';
-            logConn('info','Positions T'+(i+1)+' keys: '+keys,'dim');
-            if(r.msg) logConn('warn','T'+(i+1)+' msg: '+r.msg,'warn');
-            if(r._debug){
-                r._debug.forEach(function(a){
-                    var msg='  → '+a.path+' '+(a.error?'❌ '+a.error:(a.count!==undefined?'✓ '+a.count+' véhicules':'∅'));
-                    logConn(a.error?'warn':'info',msg,a.error?'warn':'dim');
-                    if(a.sample) logConn('info','    sample: '+JSON.stringify(a.sample).substring(0,150),'dim');
-                });
-            }
-            if(r.objets){
-                var arr=Array.isArray(r.objets)?r.objets:[r.objets];
-                logConn('info','T'+(i+1)+' objets: '+arr.length+' éléments','dim');
-                if(arr.length&&arr[0]) logConn('info','T'+(i+1)+' [0]: '+JSON.stringify(arr[0]).substring(0,200),'dim');
-            }
-        });
-
-        var lines=[{data:results[0],cls:'t1',label:'T1'},{data:results[1],cls:'t2',label:'T2'}];
-        lines.forEach(function(l){
-            if(!l.data) return;
-            // Try multiple possible response structures
-            var vehicles=l.data.objets||l.data.vehicules||l.data.vehicles||l.data.listeVehicules||[];
-            if(!Array.isArray(vehicles)) vehicles=[vehicles];
-            vehicles.forEach(function(v){
-                if(!v) return;
-                var lat=parseFloat(v.latitude||v.lat);
-                var lng=parseFloat(v.longitude||v.lng||v.lon);
-                if(isNaN(lat)||isNaN(lng)) return;
-                var dest=v.destination||v.directionCommerciale||v.direction||'?';
-                var charge=typeof v.tauxDeCharge==='number'?v.tauxDeCharge:-1;
-                var chargeLabel=charge<0?'':charge<30?' · Peu fréquenté':charge<70?' · Modéré':' · Très fréquenté';
-                // Determine direction: heading west (← HdC) or east (→ Chalez/Viotte)
-                var dn=dest.toLowerCase();
-                var goingWest=dn.indexOf('haut')>=0||dn.indexOf('chazal')>=0;
-                var arrow=goingWest?'←':'→';
-                // Short destination
-                var sd=dest;
-                if(dn.indexOf('haut')>=0||dn.indexOf('chazal')>=0) sd='HdC';
-                else if(dn.indexOf('chalezeule')>=0) sd='Chalez.';
-                else if(dn.indexOf('viotte')>=0) sd='Viotte';
-                else if(sd.length>8) sd=sd.substring(0,7)+'…';
-                var bgCol=l.cls==='t1'?'#00A5C2':'#006D78';
-                var html='<div style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:14px;font-size:11px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';">'
-                    +l.label
-                    +' <span style="opacity:.8">'+arrow+'</span> '
-                    +'<span style="font-size:9px">'+sd+'</span>'
-                    +'</div>';
-                var icon=L.divIcon({
-                    className:'leaflet-tram-pill',
-                    html:html,
-                    iconSize:[120,28],iconAnchor:[60,14]
-                });
-                var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
-                m.bindPopup('<div class="pop-name">'+l.label+' '+arrow+' '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
-                vehicleMarkers.push(m);
-            });
-        });
-        logConn('ok','Carte: '+vehicleMarkers.length+' véhicules','ok');
-        // Update vehicle count in legend
+    // Debug: check if stationData has anything
+    var sdKeys=Object.keys(stationData);
+    logConn('info','fetchPositions: stationData has '+sdKeys.length+' keys','dim');
+    if(sdKeys.length===0){
+        logConn('warn','⚠ Pas de données stations — batch pas encore chargé ?','warn');
         var vc=document.getElementById('vehicleCount');
-        if(vc) vc.textContent=vehicleMarkers.length+' trams';
+        if(vc) vc.textContent='attente…';
+        return;
+    }
+    // Show a few sample entries
+    var sample=sdKeys.slice(0,3);
+    sample.forEach(function(k){
+        var d=stationData[k];
+        var lm=d.left.length?d.left[0].min:'∅';
+        var rm=d.right.length?d.right[0].min:'∅';
+        logConn('info','  "'+k+'": L='+lm+' R='+rm,'dim');
     });
+
+    // Estimate tram positions from departure times
+    var lineConfigs=[
+        {key:'T1',stations:LINES.T1.stations,color:'#00A5C2',label:'T1',destLeft:'HdC',destRight:'Chalez.'},
+        {key:'T2',stations:LINES.T2.stations,color:'#006D78',label:'T2',destLeft:'HdC',destRight:'Viotte'}
+    ];
+
+    lineConfigs.forEach(function(cfg){
+        var sts=cfg.stations;
+        // Debug: count how many stations have data
+        var hasData=0,hasClose=0;
+        for(var ii=0;ii<sts.length;ii++){
+            var dd=findStation(sts[ii]);
+            if(dd&&(dd.left.length||dd.right.length)) hasData++;
+            if(dd&&((dd.left.length&&dd.left[0].min<=6)||(dd.right.length&&dd.right[0].min<=6))) hasClose++;
+        }
+        logConn('info',cfg.label+': '+hasData+'/'+sts.length+' stations avec data, '+hasClose+' avec tram ≤6min','dim');
+
+        // Scan for westbound trams (left = toward HdC = decreasing index)
+        var usedLeft={};
+        for(var i=0;i<sts.length;i++){
+            var d=findStation(sts[i]);
+            if(!d||!d.left.length) continue;
+            var m=d.left[0].min;
+            if(m>6||usedLeft[i]) continue;
+            // Place tram: at station if 0, interpolated toward next-east station if 1-3
+            var c0=COORDS[sts[i]];
+            if(!c0) continue;
+            var lat=c0[0],lng=c0[1];
+            if(m>=1&&i<sts.length-1){
+                var c1=COORDS[sts[i+1]];
+                if(c1){
+                    var t=Math.min(m/7,0.9); // fraction toward next station east
+                    lat=c0[0]+(c1[0]-c0[0])*t;
+                    lng=c0[1]+(c1[1]-c0[1])*t;
+                }
+            }
+            // Mark nearby stations as used to avoid duplicates
+            for(var j=Math.max(0,i-2);j<=Math.min(sts.length-1,i+2);j++){
+                var dd=findStation(sts[j]);
+                if(dd&&dd.left.length&&dd.left[0].min<=m+2) usedLeft[j]=true;
+            }
+            addTramMarker(lat,lng,cfg.color,cfg.label,'←',cfg.destLeft,m);
+        }
+        // Scan for eastbound trams (right = toward Chalez/Viotte = increasing index)
+        var usedRight={};
+        for(var i=0;i<sts.length;i++){
+            var d=findStation(sts[i]);
+            if(!d||!d.right.length) continue;
+            var m=d.right[0].min;
+            if(m>6||usedRight[i]) continue;
+            var c0=COORDS[sts[i]];
+            if(!c0) continue;
+            var lat=c0[0],lng=c0[1];
+            if(m>=1&&i>0){
+                var c1=COORDS[sts[i-1]];
+                if(c1){
+                    var t=Math.min(m/7,0.9);
+                    lat=c0[0]+(c1[0]-c0[0])*t;
+                    lng=c0[1]+(c1[1]-c0[1])*t;
+                }
+            }
+            for(var j=Math.max(0,i-2);j<=Math.min(sts.length-1,i+2);j++){
+                var dd=findStation(sts[j]);
+                if(dd&&dd.right.length&&dd.right[0].min<=m+2) usedRight[j]=true;
+            }
+            addTramMarker(lat,lng,cfg.color,cfg.label,'→',cfg.destRight,m);
+        }
+    });
+
+    logConn('ok','Carte: '+vehicleMarkers.length+' trams estimés','ok');
+    var vc=document.getElementById('vehicleCount');
+    if(vc) vc.textContent=vehicleMarkers.length+' trams';
 
     // Update station icons (active = tram imminent)
     stationMarkers.forEach(function(s){
@@ -1045,6 +1064,24 @@ function fetchPositions(){
         var iconEl=document.getElementById('sm-'+norm(s.name));
         if(iconEl) iconEl.classList.toggle('active',!!hasImm);
     });
+}
+
+function addTramMarker(lat,lng,bgCol,label,arrow,dest,min){
+    var minTag=min<=1?'<span style="font-size:7px;opacity:.7"> ~'+min+'\'</span>':'';
+    var html='<div style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:14px;font-size:11px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';">'
+        +label
+        +' <span style="opacity:.8">'+arrow+'</span> '
+        +'<span style="font-size:9px">'+dest+'</span>'
+        +minTag
+        +'</div>';
+    var icon=L.divIcon({
+        className:'leaflet-tram-pill',
+        html:html,
+        iconSize:[120,28],iconAnchor:[60,14]
+    });
+    var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
+    m.bindPopup('<div class="pop-name">'+label+' '+arrow+' '+dest+'</div><div class="pop-dir">~'+min+' min de la prochaine station</div>');
+    vehicleMarkers.push(m);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
