@@ -302,16 +302,24 @@
             background:none; border:none;
         }
         .tram-icon {
-            width:28px; height:28px; border-radius:50%;
-            display:flex; align-items:center; justify-content:center;
-            font-size:14px; color:#fff; font-weight:700;
-            box-shadow:0 2px 8px rgba(0,0,0,.4);
-            border:2px solid #fff;
+            position:relative;
+            display:flex; align-items:center; gap:2px;
+            padding:2px 7px;
+            border-radius:14px;
+            font-size:11px; color:#fff; font-weight:700;
+            box-shadow:0 2px 8px rgba(0,0,0,.5);
+            border:2px solid rgba(255,255,255,.8);
+            white-space:nowrap;
             transition:transform .3s;
+            line-height:1.1;
         }
         .tram-icon.t1 { background:var(--t1); }
         .tram-icon.t2 { background:var(--t2); }
-        .tram-icon:hover { transform:scale(1.2); }
+        .tram-icon:hover { transform:scale(1.15); z-index:9999 !important; }
+        .tram-icon .ti-line { font-size:10px; }
+        .tram-icon .ti-sep { opacity:.5; font-size:8px; }
+        .tram-icon .ti-dest { font-size:9px; font-weight:600; opacity:.95; }
+        .tram-icon .ti-arrow { font-size:10px; opacity:.8; }
 
         .station-marker {
             background:none; border:none;
@@ -339,13 +347,6 @@
             box-shadow:0 2px 6px rgba(0,0,0,.5);
         }
         .leaflet-tooltip.station-tip::before { border:none; }
-
-        .tram-dest {
-            font-size:7px; font-weight:600; white-space:nowrap;
-            position:absolute; top:28px; left:50%; transform:translateX(-50%);
-            background:rgba(10,10,15,.85); color:#fff; padding:1px 4px; border-radius:3px;
-            pointer-events:none;
-        }
 
         .leaflet-popup-content-wrapper {
             background:var(--card) !important; color:var(--text) !important;
@@ -429,8 +430,8 @@
     <div class="map-view" id="mapView">
         <div id="tramMap"></div>
         <div class="map-legend">
-            <div class="ml-row"><div class="ml-dot" style="background:var(--t1)"></div> Tram T1</div>
-            <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> Tram T2</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--t1)"></div> T1 · ← HdC · → Chalez.</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> T2 · ← HdC · → Viotte</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
@@ -950,16 +951,31 @@ function fetchPositions(){
                 var lng=parseFloat(v.longitude||v.lng||v.lon);
                 if(isNaN(lat)||isNaN(lng)) return;
                 var dest=v.destination||v.directionCommerciale||v.direction||'?';
-                var shortDest=dest.length>12?dest.substring(0,10)+'…':dest;
                 var charge=typeof v.tauxDeCharge==='number'?v.tauxDeCharge:-1;
                 var chargeLabel=charge<0?'':charge<30?' · Peu fréquenté':charge<70?' · Modéré':' · Très fréquenté';
+                // Determine direction: heading west (← HdC) or east (→ Chalez/Viotte)
+                var dn=dest.toLowerCase();
+                var goingWest=dn.indexOf('haut')>=0||dn.indexOf('chazal')>=0;
+                var arrow=goingWest?'←':'→';
+                // Short destination
+                var sd=dest;
+                if(dn.indexOf('haut')>=0||dn.indexOf('chazal')>=0) sd='HdC';
+                else if(dn.indexOf('chalezeule')>=0) sd='Chalez.';
+                else if(dn.indexOf('viotte')>=0) sd='Viotte';
+                else if(sd.length>8) sd=sd.substring(0,7)+'…';
+                var html='<div class="tram-icon '+l.cls+'">'
+                    +'<span class="ti-line">'+l.label+'</span>'
+                    +'<span class="ti-sep">·</span>'
+                    +'<span class="ti-arrow">'+arrow+'</span>'
+                    +'<span class="ti-dest">'+sd+'</span>'
+                    +'</div>';
                 var icon=L.divIcon({
                     className:'tram-marker',
-                    html:'<div class="tram-icon '+l.cls+'">'+l.label+'</div><div class="tram-dest">→ '+shortDest+'</div>',
-                    iconSize:[28,40],iconAnchor:[14,14]
+                    html:html,
+                    iconSize:[0,0],iconAnchor:[0,10]
                 });
                 var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
-                m.bindPopup('<div class="pop-name">'+l.label+' → '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
+                m.bindPopup('<div class="pop-name">'+l.label+' '+arrow+' '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
                 vehicleMarkers.push(m);
             });
         });
