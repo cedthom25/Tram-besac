@@ -298,6 +298,7 @@
         .map-legend .ml-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 
         /* Leaflet custom markers */
+        .leaflet-marker-icon { overflow:visible !important; }
         .tram-marker {
             background:none !important; border:none !important;
             overflow:visible !important;
@@ -437,6 +438,7 @@
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
+            <div class="ml-row" style="opacity:.3;font-size:8px;margin-top:2px">v33</div>
         </div>
     </div>
 
@@ -965,16 +967,17 @@ function fetchPositions(){
                 else if(dn.indexOf('chalezeule')>=0) sd='Chalez.';
                 else if(dn.indexOf('viotte')>=0) sd='Viotte';
                 else if(sd.length>8) sd=sd.substring(0,7)+'…';
-                var html='<div class="tram-icon '+l.cls+'">'
-                    +'<span class="ti-line">'+l.label+'</span>'
-                    +'<span class="ti-sep">·</span>'
-                    +'<span class="ti-arrow">'+arrow+'</span>'
-                    +'<span class="ti-dest">'+sd+'</span>'
+                var bgCol=l.cls==='t1'?'#00A5C2':'#006D78';
+                var html='<div style="position:absolute;left:0;top:0;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:14px;font-size:11px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';z-index:500;pointer-events:auto;cursor:pointer;">'
+                    +'<span>'+l.label+'</span>'
+                    +'<span style="opacity:.5;font-size:8px">·</span>'
+                    +'<span style="font-size:10px;opacity:.8">'+arrow+'</span>'
+                    +'<span style="font-size:9px;font-weight:600;opacity:.95">'+sd+'</span>'
                     +'</div>';
                 var icon=L.divIcon({
-                    className:'tram-marker',
+                    className:'',
                     html:html,
-                    iconSize:[100,24],iconAnchor:[50,12]
+                    iconSize:[1,1],iconAnchor:[0,0]
                 });
                 var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
                 m.bindPopup('<div class="pop-name">'+l.label+' '+arrow+' '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
