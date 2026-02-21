@@ -435,12 +435,12 @@
     <div class="map-view" id="mapView">
         <div id="tramMap"></div>
         <div class="map-legend">
-            <div class="ml-row"><div class="ml-dot" style="background:#00A5C2"></div> T1 · ← HdC · → Chalez.</div>
-            <div class="ml-row"><div class="ml-dot" style="background:#006D78"></div> T2 · ← HdC · → Viotte</div>
+            <div class="ml-row"><div class="ml-dot" style="background:#00A5C2"></div> T1 <div class="ml-dot" style="background:#006D78;margin-left:4px"></div> T2</div>
+            <div class="ml-row"><span style="color:#FF8C00;font-weight:700">←</span> vers HdC · <span style="color:#4A9FFF;font-weight:700">→</span> vers Chalez./Viotte</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
-            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v38 · <span id="vehicleCount">…</span></div>
+            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v39 · <span id="vehicleCount">…</span></div>
         </div>
     </div>
 
@@ -1067,20 +1067,18 @@ function fetchPositions(){
 }
 
 function addTramMarker(lat,lng,bgCol,label,arrow,dest,min){
-    var minTag=min<=1?'<span style="font-size:7px;opacity:.7"> ~'+min+'\'</span>':'';
-    var html='<div style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:14px;font-size:11px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';">'
-        +label
-        +' <span style="opacity:.8">'+arrow+'</span> '
-        +'<span style="font-size:9px">'+dest+'</span>'
-        +minTag
+    var arrowCol=arrow==='←'?'#FF8C00':'#4A9FFF';
+    var html='<div style="display:inline-flex;align-items:center;gap:1px;padding:3px 7px;border-radius:14px;font-size:12px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';">'
+        +'🚋'+label
+        +'<span style="color:'+arrowCol+';font-size:14px;font-weight:900;margin:0 1px">'+arrow+'</span>'
         +'</div>';
     var icon=L.divIcon({
         className:'leaflet-tram-pill',
         html:html,
-        iconSize:[120,28],iconAnchor:[60,14]
+        iconSize:[90,28],iconAnchor:[45,14]
     });
     var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
-    m.bindPopup('<div class="pop-name">'+label+' '+arrow+' '+dest+'</div><div class="pop-dir">~'+min+' min de la prochaine station</div>');
+    m.bindPopup('<div class="pop-name">🚋 '+label+' '+arrow+' '+dest+'</div><div class="pop-dir">~'+min+'\' de la prochaine station</div>');
     vehicleMarkers.push(m);
 }
 
