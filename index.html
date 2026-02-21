@@ -299,6 +299,8 @@
 
         /* Leaflet custom markers */
         .leaflet-marker-icon { overflow:visible !important; }
+        .leaflet-div-icon { background:none !important; border:none !important; overflow:visible !important; }
+        .leaflet-tram-pill { background:none !important; border:none !important; overflow:visible !important; }
         .tram-marker {
             background:none !important; border:none !important;
             overflow:visible !important;
@@ -433,12 +435,14 @@
     <div class="map-view" id="mapView">
         <div id="tramMap"></div>
         <div class="map-legend">
-            <div class="ml-row"><div class="ml-dot" style="background:var(--t1)"></div> T1 · ← HdC · → Chalez.</div>
-            <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> T2 · ← HdC · → Viotte</div>
+            <div class="ml-row"><div class="ml-dot" style="background:#FF8C00"></div> ← vers Hauts du Chazal</div>
+            <div class="ml-row"><div class="ml-dot" style="background:#4A9FFF"></div> → vers Chalez. / Viotte</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--t1)"></div> Tram T1</div>
+            <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> Tram T2</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
-            <div class="ml-row" style="opacity:.3;font-size:8px;margin-top:2px">v33</div>
+            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v35 · <span id="vehicleCount">…</span></div>
         </div>
     </div>
 
@@ -856,13 +860,47 @@ function initMap(){
         maxZoom:19
     }).addTo(mapInstance);
 
-    // Draw T1 line
-    var t1Coords=LINES.T1.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
-    L.polyline(t1Coords,{color:'#00A5C2',weight:4,opacity:.6,dashArray:null}).addTo(mapInstance);
+    // Offset polyline helper (perpendicular offset in degrees)
+    function offsetLine(coords,dist){
+        var out=[];
+        for(var i=0;i<coords.length;i++){
+            var prev=coords[Math.max(0,i-1)], next=coords[Math.min(coords.length-1,i+1)];
+            var dx=next[1]-prev[1], dy=next[0]-prev[0];
+            var len=Math.sqrt(dx*dx+dy*dy)||1;
+            // perpendicular: (-dy, dx) normalized
+            out.push([coords[i][0]+(-dx/len)*dist, coords[i][1]+(dy/len)*dist]);
+        }
+        return out;
+    }
+    var OFF=0.00015; // ~15m offset
 
-    // Draw T2 line (diverges at Parc Micaud)
+    // Draw T1 dual tracks
+    var t1Coords=LINES.T1.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
+    var t1Left=offsetLine(t1Coords,OFF);   // ← vers HdC (orange)
+    var t1Right=offsetLine(t1Coords,-OFF); // → vers Chalezeule (bleu)
+    L.polyline(t1Left,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
+    L.polyline(t1Right,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
+
+    // Draw T2 dual tracks (only the branch: Parc Micaud → Flore → Gare Viotte)
     var t2Coords=LINES.T2.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
-    L.polyline(t2Coords,{color:'#006D78',weight:4,opacity:.6,dashArray:'8 6'}).addTo(mapInstance);
+    // T2 shares track with T1 up to Parc Micaud, then diverges
+    // Find where T2 diverges (stations not in T1)
+    var t2Only=[];
+    var t1Set={};LINES.T1.stations.forEach(function(n){t1Set[n]=true;});
+    var diverged=false;
+    LINES.T2.stations.forEach(function(n){
+        if(!t1Set[n]) diverged=true;
+        if(diverged){var c=COORDS[n];if(c)t2Only.push([c[0],c[1]]);}
+    });
+    // Add Parc Micaud as start of the branch
+    var pmC=COORDS['Parc Micaud'];
+    if(pmC&&t2Only.length) t2Only.unshift([pmC[0],pmC[1]]);
+    if(t2Only.length>1){
+        var t2Left=offsetLine(t2Only,OFF);
+        var t2Right=offsetLine(t2Only,-OFF);
+        L.polyline(t2Left,{color:'#FF8C00',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
+        L.polyline(t2Right,{color:'#4A9FFF',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
+    }
 
     // Station markers with tooltips
     var allStations={};
@@ -936,11 +974,22 @@ function fetchPositions(){
 
         // Debug: log raw response structure
         results.forEach(function(r,i){
-            if(!r){logConn('warn','Positions T'+(i+1)+': null','warn');return;}
+            if(!r){logConn('warn','Positions T'+(i+1)+': null/erreur réseau','warn');return;}
             var keys=r?Object.keys(r).join(','):'null';
-            logConn('info','Positions T'+(i+1)+' keys: '+keys+(r.objets?' ('+( Array.isArray(r.objets)?r.objets.length:'obj')+')':''),'dim');
-            if(r.objets&&!Array.isArray(r.objets)) logConn('info','T'+(i+1)+' objets sample: '+JSON.stringify(r.objets).substring(0,200),'dim');
-            if(r.objets&&Array.isArray(r.objets)&&r.objets.length) logConn('info','T'+(i+1)+' vehicle[0]: '+JSON.stringify(r.objets[0]).substring(0,200),'dim');
+            logConn('info','Positions T'+(i+1)+' keys: '+keys,'dim');
+            // Show worker debug attempts
+            if(r._debug){
+                r._debug.forEach(function(a){
+                    var msg='  → '+a.path+' '+(a.error?'❌ '+a.error:(a.count!==undefined?'✓ '+a.count+' véhicules':'∅'));
+                    logConn(a.error?'warn':'info',msg,a.error?'warn':'dim');
+                    if(a.sample) logConn('info','    sample: '+JSON.stringify(a.sample).substring(0,150),'dim');
+                });
+            }
+            if(r.objets){
+                var arr=Array.isArray(r.objets)?r.objets:[r.objets];
+                logConn('info','T'+(i+1)+' objets: '+arr.length+' éléments','dim');
+                if(arr.length&&arr[0]) logConn('info','T'+(i+1)+' [0]: '+JSON.stringify(arr[0]).substring(0,200),'dim');
+            }
         });
 
         var lines=[{data:results[0],cls:'t1',label:'T1'},{data:results[1],cls:'t2',label:'T2'}];
@@ -968,16 +1017,15 @@ function fetchPositions(){
                 else if(dn.indexOf('viotte')>=0) sd='Viotte';
                 else if(sd.length>8) sd=sd.substring(0,7)+'…';
                 var bgCol=l.cls==='t1'?'#00A5C2':'#006D78';
-                var html='<div style="position:absolute;left:0;top:0;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:14px;font-size:11px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';z-index:500;pointer-events:auto;cursor:pointer;">'
-                    +'<span>'+l.label+'</span>'
-                    +'<span style="opacity:.5;font-size:8px">·</span>'
-                    +'<span style="font-size:10px;opacity:.8">'+arrow+'</span>'
-                    +'<span style="font-size:9px;font-weight:600;opacity:.95">'+sd+'</span>'
+                var html='<div style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:14px;font-size:11px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.8);white-space:nowrap;background:'+bgCol+';">'
+                    +l.label
+                    +' <span style="opacity:.8">'+arrow+'</span> '
+                    +'<span style="font-size:9px">'+sd+'</span>'
                     +'</div>';
                 var icon=L.divIcon({
-                    className:'',
+                    className:'leaflet-tram-pill',
                     html:html,
-                    iconSize:[1,1],iconAnchor:[0,0]
+                    iconSize:[120,28],iconAnchor:[60,14]
                 });
                 var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
                 m.bindPopup('<div class="pop-name">'+l.label+' '+arrow+' '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
@@ -985,6 +1033,9 @@ function fetchPositions(){
             });
         });
         logConn('ok','Carte: '+vehicleMarkers.length+' véhicules','ok');
+        // Update vehicle count in legend
+        var vc=document.getElementById('vehicleCount');
+        if(vc) vc.textContent=vehicleMarkers.length+' trams';
     });
 
     // Update station icons (active = tram imminent)
