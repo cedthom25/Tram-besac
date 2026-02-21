@@ -323,6 +323,30 @@
         }
         .station-icon.active { background:var(--green); border-color:var(--green); width:14px; height:14px; box-shadow:0 0 10px var(--green-glow); }
 
+        .user-pos {
+            width:16px; height:16px; border-radius:50%;
+            background:rgba(66,133,244,.9); border:3px solid #fff;
+            box-shadow:0 0 12px rgba(66,133,244,.6), 0 0 24px rgba(66,133,244,.3);
+            animation:user-pulse 2s ease-in-out infinite;
+        }
+        @keyframes user-pulse { 0%,100%{box-shadow:0 0 12px rgba(66,133,244,.6);} 50%{box-shadow:0 0 20px rgba(66,133,244,.8),0 0 40px rgba(66,133,244,.3);} }
+
+        .leaflet-tooltip.station-tip {
+            background:rgba(10,10,15,.85); color:var(--text);
+            border:1px solid var(--border); border-radius:4px;
+            font-family:'Outfit',sans-serif; font-size:10px; font-weight:600;
+            padding:2px 6px; white-space:nowrap;
+            box-shadow:0 2px 6px rgba(0,0,0,.5);
+        }
+        .leaflet-tooltip.station-tip::before { border:none; }
+
+        .tram-dest {
+            font-size:7px; font-weight:600; white-space:nowrap;
+            position:absolute; top:28px; left:50%; transform:translateX(-50%);
+            background:rgba(10,10,15,.85); color:#fff; padding:1px 4px; border-radius:3px;
+            pointer-events:none;
+        }
+
         .leaflet-popup-content-wrapper {
             background:var(--card) !important; color:var(--text) !important;
             border:1px solid var(--border) !important; border-radius:var(--radius-sm) !important;
@@ -409,6 +433,7 @@
             <div class="ml-row"><div class="ml-dot" style="background:var(--t2)"></div> Tram T2</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
+            <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
         </div>
     </div>
 
@@ -428,17 +453,22 @@ var WORKER='https://cold-rain-f589.cedric-thomas6.workers.dev';
 var REFRESH=30000, TIMEOUT=15000;
 
 var COORDS={
-'Hauts du Chazal':[47.2270,5.9685],'UFR Santé':[47.2282,5.9720],'Maison des Familles':[47.2299,5.9773],
-'CHU Minjoz':[47.2318,5.9800],'Île-de-France':[47.2330,5.9850],'Époisses':[47.2335,5.9895],
-'Allende':[47.2340,5.9933],'Micropolis':[47.2348,5.9972],'Malcombe':[47.2358,6.0018],
-'Rosemont':[47.2370,6.0058],'Brulard':[47.2382,6.0092],'Polygone':[47.2387,6.0128],
-'Chamars':[47.2380,6.0168],'Canot':[47.2395,6.0170],'Battant':[47.2412,6.0175],
-'Révolution':[47.2400,6.0210],'République':[47.2385,6.0253],'Parc Micaud':[47.2402,6.0280],
-'Fontaine Argent':[47.2428,6.0280],'Tristan Bernard':[47.2450,6.0268],'Brûlefoin':[47.2468,6.0290],
-'Les Vaîtes':[47.2490,6.0320],'Schweitzer':[47.2508,6.0370],'Croix de Palente':[47.2520,6.0405],
-'Lilas':[47.2530,6.0450],'Orchamps':[47.2540,6.0500],'Fort Benoît':[47.2548,6.0545],
-'Marnières':[47.2555,6.0580],'Chalezeule':[47.2560,6.0620],
-'Flore':[47.2438,6.0240],'Gare Viotte':[47.2468,6.0198]
+'Hauts du Chazal':[47.221559,5.951348],'UFR Santé':[47.223725,5.956143],
+'Maison des Familles':[47.225974,5.960065],'CHU Minjoz':[47.226340,5.963803],
+'Île-de-France':[47.221923,5.967331],'Époisses':[47.222408,5.972656],
+'Allende':[47.219803,5.973422],'Micropolis':[47.220612,5.978236],
+'Malcombe':[47.222527,5.982383],'Rosemont':[47.226042,5.997303],
+'Brulard':[47.228466,6.005990],'Polygone':[47.229746,6.010817],
+'Chamars':[47.233671,6.020277],'Canot':[47.236023,6.015907],
+'Battant':[47.239440,6.019409],'Révolution':[47.240399,6.022810],
+'République':[47.240920,6.027150],'Parc Micaud':[47.242772,6.029775],
+'Fontaine Argent':[47.244322,6.031192],'Tristan Bernard':[47.245984,6.033764],
+'Brûlefoin':[47.248149,6.037134],'Les Vaîtes':[47.249811,6.042275],
+'Schweitzer':[47.253021,6.043074],'Croix de Palente':[47.255981,6.044826],
+'Lilas':[47.260622,6.041731],'Orchamps':[47.262922,6.045238],
+'Fort Benoît':[47.262117,6.050484],'Marnières':[47.263346,6.055511],
+'Chalezeule':[47.261405,6.060917],
+'Flore':[47.244800,6.028200],'Gare Viotte':[47.247100,6.021900]
 };
 
 var LINES={
@@ -521,6 +551,7 @@ function stopGeo(){
     if(geoWatchId!==null){navigator.geolocation.clearWatch(geoWatchId);geoWatchId=null;}
     nearestIdx=-1;
     document.querySelectorAll('.s-row.nearest').forEach(function(r){r.classList.remove('nearest');});
+    if(userMarker&&mapInstance){mapInstance.removeLayer(userMarker);userMarker=null;}
 }
 function onGeoPos(pos){
     var lat=pos.coords.latitude,lng=pos.coords.longitude;
@@ -534,6 +565,18 @@ function onGeoPos(pos){
     document.querySelectorAll('.s-row').forEach(function(r,i){r.classList.toggle('nearest',i===bestIdx);});
     if(bestIdx>=0){
         logConn('ok','Station proche: '+line.stations[bestIdx]+' ('+Math.round(bestDist)+'m)','ok');
+    }
+    // Update map marker
+    if(mapInstance){
+        if(!userMarker){
+            userMarker=L.marker([lat,lng],{
+                icon:L.divIcon({className:'station-marker',html:'<div class="user-pos"></div>',iconSize:[16,16],iconAnchor:[8,8]}),
+                zIndexOffset:2000
+            }).addTo(mapInstance);
+            userMarker.bindPopup('<div class="pop-name">Ma position</div>');
+        } else {
+            userMarker.setLatLng([lat,lng]);
+        }
     }
 }
 function onGeoErr(e){logConn('warn','Géoloc: '+e.message,'warn');}
@@ -765,7 +808,7 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').cat
 /* ══════════════════════════════════════════
    MAP VIEW
    ══════════════════════════════════════════ */
-var mapInstance=null, mapActive=false, mapPositionTimer=null;
+var mapInstance=null, mapActive=false, mapPositionTimer=null, userMarker=null;
 var vehicleMarkers=[], stationMarkers=[];
 var listElements=['favBar','tabs-wrap','trafficBanner','dirBar-wrap','stateContainer','stationsWrapOuter','noService','controlsWrap','legendWrap','creditsWrap'];
 
@@ -816,7 +859,7 @@ function initMap(){
     var t2Coords=LINES.T2.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
     L.polyline(t2Coords,{color:'#006D78',weight:4,opacity:.6,dashArray:'8 6'}).addTo(mapInstance);
 
-    // Station markers
+    // Station markers with tooltips
     var allStations={};
     LINES.T1.stations.forEach(function(n){allStations[n]=true;});
     LINES.T2.stations.forEach(function(n){allStations[n]=true;});
@@ -825,10 +868,25 @@ function initMap(){
         var marker=L.marker([c[0],c[1]],{
             icon:L.divIcon({className:'station-marker',html:'<div class="station-icon" id="sm-'+norm(name)+'"></div>',iconSize:[10,10],iconAnchor:[5,5]})
         }).addTo(mapInstance);
+        marker.bindTooltip(name,{permanent:true,direction:'right',offset:[8,0],className:'station-tip',opacity:0});
         marker.bindPopup('<div class="pop-name">'+name+'</div><div class="pop-times" id="mp-'+norm(name)+'">Chargement…</div>');
         marker.on('click',function(){updatePopup(name,marker);});
         stationMarkers.push({name:name,marker:marker});
     });
+
+    // Show/hide tooltips on zoom
+    function updateLabels(){
+        var z=mapInstance.getZoom();
+        stationMarkers.forEach(function(s){
+            var tip=s.marker.getTooltip();
+            if(tip){
+                var el=tip.getElement();
+                if(el) el.style.opacity=z>=15?'1':'0';
+            }
+        });
+    }
+    mapInstance.on('zoomend',updateLabels);
+    updateLabels();
 
     // Fit bounds
     var allCoords=t1Coords.concat(t2Coords);
@@ -863,7 +921,6 @@ function updatePopup(name,marker){
 }
 
 function fetchPositions(){
-    // Fetch T1 and T2 positions
     Promise.all([
         workerFetch(WORKER+'?method=positions&ligne=101').catch(function(){return null;}),
         workerFetch(WORKER+'?method=positions&ligne=102').catch(function(){return null;})
@@ -872,20 +929,34 @@ function fetchPositions(){
         vehicleMarkers.forEach(function(m){mapInstance.removeLayer(m);});
         vehicleMarkers=[];
 
+        // Debug: log raw response structure
+        results.forEach(function(r,i){
+            if(!r){logConn('warn','Positions T'+(i+1)+': null','warn');return;}
+            var keys=r?Object.keys(r).join(','):'null';
+            logConn('info','Positions T'+(i+1)+' keys: '+keys+(r.objets?' ('+( Array.isArray(r.objets)?r.objets.length:'obj')+')':''),'dim');
+            if(r.objets&&!Array.isArray(r.objets)) logConn('info','T'+(i+1)+' objets sample: '+JSON.stringify(r.objets).substring(0,200),'dim');
+            if(r.objets&&Array.isArray(r.objets)&&r.objets.length) logConn('info','T'+(i+1)+' vehicle[0]: '+JSON.stringify(r.objets[0]).substring(0,200),'dim');
+        });
+
         var lines=[{data:results[0],cls:'t1',label:'T1'},{data:results[1],cls:'t2',label:'T2'}];
         lines.forEach(function(l){
-            if(!l.data||!l.data.ok||!l.data.objets) return;
-            (Array.isArray(l.data.objets)?l.data.objets:[l.data.objets]).forEach(function(v){
-                if(!v.latitude||!v.longitude) return;
-                var lat=parseFloat(v.latitude), lng=parseFloat(v.longitude);
+            if(!l.data) return;
+            // Try multiple possible response structures
+            var vehicles=l.data.objets||l.data.vehicules||l.data.vehicles||l.data.listeVehicules||[];
+            if(!Array.isArray(vehicles)) vehicles=[vehicles];
+            vehicles.forEach(function(v){
+                if(!v) return;
+                var lat=parseFloat(v.latitude||v.lat);
+                var lng=parseFloat(v.longitude||v.lng||v.lon);
                 if(isNaN(lat)||isNaN(lng)) return;
-                var dest=v.destination||v.directionCommerciale||'?';
+                var dest=v.destination||v.directionCommerciale||v.direction||'?';
+                var shortDest=dest.length>12?dest.substring(0,10)+'…':dest;
                 var charge=typeof v.tauxDeCharge==='number'?v.tauxDeCharge:-1;
                 var chargeLabel=charge<0?'':charge<30?' · Peu fréquenté':charge<70?' · Modéré':' · Très fréquenté';
                 var icon=L.divIcon({
                     className:'tram-marker',
-                    html:'<div class="tram-icon '+l.cls+'">'+l.label+'</div>',
-                    iconSize:[28,28],iconAnchor:[14,14]
+                    html:'<div class="tram-icon '+l.cls+'">'+l.label+'</div><div class="tram-dest">→ '+shortDest+'</div>',
+                    iconSize:[28,40],iconAnchor:[14,14]
                 });
                 var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
                 m.bindPopup('<div class="pop-name">'+l.label+' → '+dest+'</div>'+(chargeLabel?'<div class="pop-dir">Affluence'+chargeLabel+'</div>':''));
