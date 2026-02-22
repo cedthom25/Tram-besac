@@ -1108,7 +1108,7 @@ function fetchPositions(){
         workerFetch(urlT1).catch(function(e){return {ok:false};}),
         workerFetch(urlT2).catch(function(e){return {ok:false};})
     ]).then(function(results){
-        var vehicles={}; // key=numVehicule
+        var vehicleSightings={}; // key=numVehicule, value=array of {min, station, ...}
 
         results.forEach(function(data,lineIdx){
             var lineName=lineIdx===0?'T1':'T2';
@@ -1119,25 +1119,32 @@ function fetchPositions(){
                     (lieu.listeTemps||[]).forEach(function(t){
                         if(!t.numVehicule) return;
                         var vk=t.numVehicule;
-                        var m=t.tempsEnMinute;
-                        if(!vehicles[vk]||m<vehicles[vk].min){
-                            vehicles[vk]={
-                                min:m,
-                                station:lieu.nomExact,
-                                dest:t.destination||'?',
-                                sensAller:t.sensAller,
-                                idLigne:t.idLigne||'',
-                                numLigne:t.numLignePublic||lineName,
-                                charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1,
-                                fiable:t.fiable!==false,
-                                numVeh:vk,
-                                gpsLat:typeof t.latitude==='number'?t.latitude:null,
-                                gpsLon:typeof t.longitude==='number'?t.longitude:null
-                            };
-                        }
+                        if(!vehicleSightings[vk]) vehicleSightings[vk]=[];
+                        vehicleSightings[vk].push({
+                            min:t.tempsEnMinute,
+                            station:lieu.nomExact,
+                            dest:t.destination||'?',
+                            sensAller:t.sensAller,
+                            idLigne:t.idLigne||'',
+                            numLigne:t.numLignePublic||lineName,
+                            charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1,
+                            fiable:t.fiable!==false,
+                            numVeh:vk
+                        });
                     });
                 });
             });
+        });
+
+        // Build vehicles with best sighting + next sighting for interpolation
+        var vehicles={};
+        Object.keys(vehicleSightings).forEach(function(vk){
+            var sights=vehicleSightings[vk];
+            sights.sort(function(a,b){return a.min-b.min;});
+            var best=sights[0];
+            best.nextStation=sights.length>1?sights[1].station:null;
+            best.nextMin=sights.length>1?sights[1].min:null;
+            vehicles[vk]=best;
         });
 
         var vehKeys=Object.keys(vehicles);
@@ -1155,10 +1162,24 @@ function fetchPositions(){
             var stKey=matchApiStation(v.station);
             if(!stKey) return;
             var c0=COORDS[stKey];
+            var lat=c0[0],lng=c0[1];
 
-            // Use real GPS coordinates from API
-            var lat=(v.gpsLat&&v.gpsLon)?v.gpsLat:c0[0];
-            var lng=(v.gpsLat&&v.gpsLon)?v.gpsLon:c0[1];
+            // Interpolate using real travel time between 2 consecutive stations
+            if(v.min>0&&v.nextStation&&v.nextMin!==null){
+                var nextKey=matchApiStation(v.nextStation);
+                if(nextKey){
+                    var cNext=COORDS[nextKey];
+                    if(cNext){
+                        var travelTime=v.nextMin-v.min; // real time between stations
+                        if(travelTime>0){
+                            var frac=v.min/travelTime; // 0=at station, 1=at next station
+                            frac=Math.min(frac,0.95);
+                            lat=c0[0]+(cNext[0]-c0[0])*frac;
+                            lng=c0[1]+(cNext[1]-c0[1])*frac;
+                        }
+                    }
+                }
+            }
 
             addTramMarker(lat,lng,color,line,arrow,destShort,v.min,v.charge,numVeh,v.fiable,v.dest);
         });
