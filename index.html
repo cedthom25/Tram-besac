@@ -914,10 +914,9 @@ function initMap(){
     function drawTracksAndStations(osmData){
         var allBounds=[];
 
-        if(osmData&&((osmData.tracksEast&&osmData.tracksEast.length)||(osmData.tracksWest&&osmData.tracksWest.length))){
-            // ═══ OSM REAL GEOMETRY (directional) ═══
-            var eLen=(osmData.tracksEast||[]).length, wLen=(osmData.tracksWest||[]).length;
-            logConn('ok','🗺 OSM: →'+eLen+' ←'+wLen+' segments, '+(osmData.stops||[]).length+' arrêts','ok');
+        if(osmData&&osmData.tracks&&osmData.tracks.length>0){
+            // ═══ OSM REAL GEOMETRY ═══
+            logConn('ok','🗺 OSM: '+osmData.tracks.length+' segments, '+(osmData.stops||[]).length+' arrêts','ok');
 
             // Update COORDS from OSM stop positions
             (osmData.stops||[]).forEach(function(s){
@@ -943,16 +942,13 @@ function initMap(){
                 }
             });
 
-            // Draw eastbound tracks (→ Chalezeule/Viotte) = blue
-            (osmData.tracksEast||[]).forEach(function(seg){
+            // Color each segment by bearing: eastbound (→) = blue, westbound (←) = orange
+            osmData.tracks.forEach(function(seg){
                 if(seg.length<2) return;
-                L.polyline(seg,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
-                seg.forEach(function(p){allBounds.push(p);});
-            });
-            // Draw westbound tracks (← Hauts du Chazal) = orange
-            (osmData.tracksWest||[]).forEach(function(seg){
-                if(seg.length<2) return;
-                L.polyline(seg,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
+                // Use bearing from first to last point
+                var dLon=seg[seg.length-1][1]-seg[0][1];
+                var col=dLon>=0?'#4A9FFF':'#FF8C00'; // east=blue, west=orange
+                L.polyline(seg,{color:col,weight:3,opacity:.7}).addTo(mapInstance);
                 seg.forEach(function(p){allBounds.push(p);});
             });
 
