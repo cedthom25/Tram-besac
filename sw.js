@@ -1,4 +1,4 @@
-var CACHE='ginko-v42l';
+var CACHE='ginko-v42m';
 var URLS=['./','./manifest.json'];
 
 self.addEventListener('install',function(e){
