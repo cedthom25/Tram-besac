@@ -437,10 +437,11 @@
         <div class="map-legend">
             <div class="ml-row"><div class="ml-dot" style="background:#00A5C2"></div> T1 <div class="ml-dot" style="background:#006D78;margin-left:4px"></div> T2</div>
             <div class="ml-row"><span style="color:#FF8C00;font-weight:700">←</span> vers HdC · <span style="color:#4A9FFF;font-weight:700">→</span> vers Chalez./Viotte</div>
+            <div class="ml-row" style="gap:8px"><span style="color:#4CAF50">●</span>calme <span style="color:#FF9800">●</span>fréquenté <span style="color:#F44336">●</span>bondé</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
-            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v41-diag · <span id="vehicleCount">…</span></div>
+            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v42 · <span id="vehicleCount">…</span></div>
         </div>
     </div>
 
@@ -792,7 +793,7 @@ function fetchTrafficInfo(){
 }
 
 function init(){
-    logConn('info','<b>v17</b> — TABLE layout + TR/getListeTemps','');
+    logConn('info','<b>v42</b> — numVehicule + affluence + batch-only','');
     renderFavBar();
     var testUrl=WORKER+'?method=temps&nom='+encodeURIComponent('République')+'&ligne=101&sens=false&nb=3';
     workerFetch(testUrl).then(function(data){
@@ -838,7 +839,7 @@ window.toggleMapView=function(){
         if(!mapInstance) initMap();
         setTimeout(function(){mapInstance.invalidateSize();},100);
         fetchPositions();
-        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,15000);
+        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,30000);
     } else {
         if(mapPositionTimer){clearInterval(mapPositionTimer);mapPositionTimer=null;}
     }
@@ -961,106 +962,118 @@ function updatePopup(name,marker){
     el.innerHTML=html;
 }
 
+function matchApiStation(apiName){
+    if(COORDS[apiName]) return apiName;
+    var parts=apiName.split(/\s*-\s*/);
+    var shortName=parts[parts.length-1].trim();
+    if(COORDS[shortName]) return shortName;
+    var nn=norm(apiName), ns=norm(shortName);
+    var keys=Object.keys(COORDS);
+    for(var i=0;i<keys.length;i++){
+        var nk=norm(keys[i]);
+        if(nk===nn||nk===ns) return keys[i];
+    }
+    for(var i=0;i<keys.length;i++){
+        var nk=norm(keys[i]);
+        if(nn.indexOf(nk)>=0||nk.indexOf(ns)>=0) return keys[i];
+    }
+    return null;
+}
+
+function findStationIdx(lineName,apiName){
+    if(!LINES[lineName]) return -1;
+    var sts=LINES[lineName].stations;
+    var matched=matchApiStation(apiName);
+    if(!matched) return -1;
+    var nm=norm(matched);
+    for(var i=0;i<sts.length;i++){
+        if(norm(sts[i])===nm) return i;
+    }
+    return -1;
+}
+
 function fetchPositions(){
-    // Clear old markers
     vehicleMarkers.forEach(function(m){mapInstance.removeLayer(m);});
     vehicleMarkers=[];
 
-    // Try SIRI real GPS first, fallback to estimation
-    logConn('info','fetchPositions: appel SIRI VehicleMonitoring…','dim');
-    var t1=workerFetch(WORKER+'?method=positions&ligne=101');
-    var t2=workerFetch(WORKER+'?method=positions&ligne=102');
+    // Fetch BOTH T1+T2 batch data — extract real vehicles via numVehicule
+    var urlT1=WORKER+'?method=batch&noms='+encodeURIComponent(LINES.T1.stations.join(','))+'&ligne=101&nb=2';
+    var urlT2=WORKER+'?method=batch&noms='+encodeURIComponent(LINES.T2.stations.join(','))+'&ligne=102&nb=2';
 
-    Promise.all([t1.catch(function(e){return {ok:false,err:e.message};}),
-                 t2.catch(function(e){return {ok:false,err:e.message};})
+    Promise.all([
+        workerFetch(urlT1).catch(function(e){return {ok:false};}),
+        workerFetch(urlT2).catch(function(e){return {ok:false};})
     ]).then(function(results){
-        var siriVehicles=[];
-        var lineLabels=['T1','T2'];
-        var lineColors=['#00A5C2','#006D78'];
-        results.forEach(function(data,idx){
-            var label=lineLabels[idx];
-            // === DEBUG BRUT ===
-            if(data&&data._debug){
-                data._debug.forEach(function(d){
-                    logConn('info','  ['+label+' debug] '+d.label+': '+(d.count!==undefined?d.count+' véhicules':'status='+d.status+' len='+d.len),'dim');
-                    if(d.sample) logConn('info','    sample: ref='+d.sample.vehicleRef+' dest="'+d.sample.destination+'" dir="'+d.sample.direction+'" lat='+d.sample.latitude+' lng='+d.sample.longitude,'dim');
-                });
-            }
-            if(data&&data.ok&&data.objets&&data.objets.length){
-                logConn('ok','SIRI '+label+': '+data.objets.length+' véhicules GPS','ok');
-                // Log EACH vehicle for diagnosis
-                data.objets.forEach(function(v,vi){
-                    logConn('info','  '+label+'['+vi+'] ref='+v.vehicleRef+' dest="'+v.destination+'" dir="'+v.direction+'" lat='+v.latitude+' lng='+v.longitude+' bearing='+v.bearing,'dim');
-                    siriVehicles.push({
-                        lat:v.latitude, lng:v.longitude,
-                        dest:v.destination||'?', dir:v.direction||'',
-                        ref:v.vehicleRef||'', bearing:v.bearing||0,
-                        line:label, color:lineColors[idx]
+        var vehicles={}; // key=numVehicule
+
+        results.forEach(function(data,lineIdx){
+            var lineName=lineIdx===0?'T1':'T2';
+            ['aller','retour'].forEach(function(dir){
+                var d=data[dir];
+                if(!d||!d.ok||!d.objets) return;
+                d.objets.forEach(function(lieu){
+                    (lieu.listeTemps||[]).forEach(function(t){
+                        if(!t.numVehicule) return;
+                        var vk=t.numVehicule;
+                        var m=t.tempsEnMinute;
+                        if(!vehicles[vk]||m<vehicles[vk].min){
+                            vehicles[vk]={
+                                min:m,
+                                station:lieu.nomExact,
+                                dest:t.destination||'?',
+                                sensAller:t.sensAller,
+                                idLigne:t.idLigne||'',
+                                numLigne:t.numLignePublic||lineName,
+                                charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1,
+                                fiable:t.fiable!==false,
+                                numVeh:vk
+                            };
+                        }
                     });
                 });
-            } else {
-                var reason=data._debug?JSON.stringify(data._debug[0]||''):'no data';
-                logConn('warn','SIRI '+label+': ∅ ('+reason+')','warn');
+            });
+        });
+
+        var vehKeys=Object.keys(vehicles);
+        logConn('ok','🚋 '+vehKeys.length+' trams physiques (numVehicule)','ok');
+
+        vehKeys.forEach(function(numVeh){
+            var v=vehicles[numVeh];
+            var line=v.idLigne==='101'?'T1':v.idLigne==='102'?'T2':v.numLigne;
+            var color=v.idLigne==='101'?'#00A5C2':'#006D78';
+            var arrow=v.sensAller?'→':'←';
+            var destShort=v.dest;
+            if(destShort.length>12) destShort=destShort.substring(0,11)+'…';
+
+            var stKey=matchApiStation(v.station);
+            if(!stKey) return;
+            var c0=COORDS[stKey];
+            var lat=c0[0],lng=c0[1];
+
+            // Interpolate: tram is approaching this station from the previous one
+            var stIdx=findStationIdx(line,v.station);
+            if(stIdx>=0&&v.min>=1){
+                var sts=LINES[line]?LINES[line].stations:null;
+                if(sts){
+                    var prevIdx=v.sensAller?(stIdx-1):(stIdx+1);
+                    if(prevIdx>=0&&prevIdx<sts.length){
+                        var cPrev=COORDS[sts[prevIdx]];
+                        if(cPrev){
+                            var frac=Math.min(v.min/5,0.85);
+                            lat=c0[0]+(cPrev[0]-c0[0])*frac;
+                            lng=c0[1]+(cPrev[1]-c0[1])*frac;
+                        }
+                    }
+                }
             }
+
+            addTramMarker(lat,lng,color,line,arrow,destShort,v.min,v.charge,numVeh,v.fiable,v.dest);
         });
 
-        // === ANALYSE DOUBLONS ===
-        var refMap={};
-        siriVehicles.forEach(function(v){
-            if(!refMap[v.ref]) refMap[v.ref]=[];
-            refMap[v.ref].push(v.line);
-        });
-        var uniqueRefs=Object.keys(refMap);
-        var dupes=uniqueRefs.filter(function(r){return refMap[r].length>1;});
-        logConn('info','📊 Total: '+siriVehicles.length+' entrées, '+uniqueRefs.length+' vehicleRef uniques, '+dupes.length+' doublons','dim');
-        if(dupes.length>0){
-            dupes.forEach(function(r){
-                logConn('warn','  ⚠ doublon ref='+r+' dans: '+refMap[r].join('+'),'warn');
-            });
-        }
-
-        if(siriVehicles.length>0){
-            // === USE REAL SIRI GPS DATA ===
-            logConn('ok','🛰 Mode GPS réel: '+siriVehicles.length+' trams','ok');
-            siriVehicles.forEach(function(v){
-                // Determine direction arrow from destination name
-                var destLow=(v.dest||'').toLowerCase();
-                var arrow, destShort;
-                // Westbound = toward Hauts du Chazal = ←
-                if(destLow.indexOf('chazal')>=0||destLow.indexOf('haut')>=0||destLow.indexOf('hdc')>=0){
-                    arrow='←'; destShort='HdC';
-                }
-                // Eastbound T1 = toward Chalezeule = →
-                else if(destLow.indexOf('chalez')>=0){
-                    arrow='→'; destShort='Chalezeule';
-                }
-                // Eastbound T2 = toward Viotte = →
-                else if(destLow.indexOf('viotte')>=0||destLow.indexOf('gare')>=0){
-                    arrow='→'; destShort='Viotte';
-                }
-                // Fallback: use SIRI direction field or bearing
-                else if(v.dir&&v.dir.indexOf('aller')>=0){
-                    arrow='→'; destShort=v.dest;
-                } else if(v.dir&&v.dir.indexOf('retour')>=0){
-                    arrow='←'; destShort=v.dest;
-                } else if(v.bearing>90&&v.bearing<270){
-                    arrow='←'; destShort=v.dest;
-                } else {
-                    arrow='→'; destShort=v.dest;
-                }
-                addTramMarker(v.lat,v.lng,v.color,v.line,arrow,destShort,null);
-            });
-        } else {
-            // === FALLBACK: estimate from departure times ===
-            logConn('warn','⚠ SIRI vide → estimation par temps d\'attente','warn');
-            estimatePositionsFromTimes();
-        }
-
-        logConn('ok','Carte: '+vehicleMarkers.length+' trams'+(siriVehicles.length>0?' (GPS)':' (estimés)'),'ok');
+        logConn('ok','Carte: '+vehicleMarkers.length+' trams (numVehicule)','ok');
         var vc=document.getElementById('vehicleCount');
-        if(vc) vc.textContent=vehicleMarkers.length+' trams'+(siriVehicles.length>0?' 🛰':'');
+        if(vc) vc.textContent=vehicleMarkers.length+' trams';
 
-        // Update station icons (active = tram imminent)
         stationMarkers.forEach(function(s){
             var d=findStation(s.name);
             var hasImm=d&&((d.left.length&&d.left[0].min<=1)||(d.right.length&&d.right[0].min<=1));
@@ -1070,77 +1083,38 @@ function fetchPositions(){
     });
 }
 
-function estimatePositionsFromTimes(){
-    var sdKeys=Object.keys(stationData);
-    if(sdKeys.length===0){
-        logConn('warn','⚠ Pas de données stations pour estimation','warn');
-        return;
-    }
-    var lineConfigs=[
-        {key:'T1',stations:LINES.T1.stations,color:'#00A5C2',label:'T1',destLeft:'HdC',destRight:'Chalez.'},
-        {key:'T2',stations:LINES.T2.stations,color:'#006D78',label:'T2',destLeft:'HdC',destRight:'Viotte'}
-    ];
-    lineConfigs.forEach(function(cfg){
-        var sts=cfg.stations;
-        var usedLeft={};
-        for(var i=0;i<sts.length;i++){
-            var d=findStation(sts[i]);
-            if(!d||!d.left.length) continue;
-            var m=d.left[0].min;
-            if(usedLeft[i]) continue;
-            var c0=COORDS[sts[i]];
-            if(!c0) continue;
-            var lat=c0[0],lng=c0[1];
-            if(m>=1&&i<sts.length-1){
-                var c1=COORDS[sts[i+1]];
-                if(c1){ var t=Math.min(m/7,0.9); lat=c0[0]+(c1[0]-c0[0])*t; lng=c0[1]+(c1[1]-c0[1])*t; }
-            }
-            for(var j=Math.max(0,i-2);j<=Math.min(sts.length-1,i+2);j++){
-                var dd=findStation(sts[j]);
-                if(dd&&dd.left.length&&dd.left[0].min<=m+2) usedLeft[j]=true;
-            }
-            addTramMarker(lat,lng,cfg.color,cfg.label,'←',cfg.destLeft,m);
-        }
-        var usedRight={};
-        for(var i=0;i<sts.length;i++){
-            var d=findStation(sts[i]);
-            if(!d||!d.right.length) continue;
-            var m=d.right[0].min;
-            if(usedRight[i]) continue;
-            var c0=COORDS[sts[i]];
-            if(!c0) continue;
-            var lat=c0[0],lng=c0[1];
-            if(m>=1&&i>0){
-                var c1=COORDS[sts[i-1]];
-                if(c1){ var t=Math.min(m/7,0.9); lat=c0[0]+(c1[0]-c0[0])*t; lng=c0[1]+(c1[1]-c0[1])*t; }
-            }
-            for(var j=Math.max(0,i-2);j<=Math.min(sts.length-1,i+2);j++){
-                var dd=findStation(sts[j]);
-                if(dd&&dd.right.length&&dd.right[0].min<=m+2) usedRight[j]=true;
-            }
-            addTramMarker(lat,lng,cfg.color,cfg.label,'→',cfg.destRight,m);
-        }
-    });
-}
-
-function addTramMarker(lat,lng,bgCol,label,arrow,dest,min){
+function addTramMarker(lat,lng,bgCol,label,arrow,destShort,min,charge,numVeh,fiable,destFull){
     var arrowCol=arrow==='←'?'#FF8C00':'#4A9FFF';
+    var chargeIcon='';
+    if(charge>=0){
+        if(charge<30) chargeIcon='<span style="color:#4CAF50;font-size:8px;margin-left:2px">●</span>';
+        else if(charge<60) chargeIcon='<span style="color:#FF9800;font-size:8px;margin-left:2px">●</span>';
+        else chargeIcon='<span style="color:#F44336;font-size:8px;margin-left:2px">●</span>';
+    }
     var html='<div style="display:inline-flex;align-items:center;gap:1px;padding:3px 7px;border-radius:14px;font-size:12px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid '+bgCol+';white-space:nowrap;background:rgba(15,15,22,.92);">'
         +'🚋'+label
         +'<span style="color:'+arrowCol+';font-size:14px;font-weight:900;margin:0 1px">'+arrow+'</span>'
+        +chargeIcon
         +'</div>';
     var icon=L.divIcon({
         className:'leaflet-tram-pill',
         html:html,
-        iconSize:[90,28],iconAnchor:[45,14]
+        iconSize:[100,28],iconAnchor:[50,14]
     });
     var m=L.marker([lat,lng],{icon:icon,zIndexOffset:1000}).addTo(mapInstance);
-    var popupText='<div class="pop-name">🚋 '+label+' '+arrow+' '+dest+'</div>';
-    if(min!==null&&min!==undefined) popupText+='<div class="pop-dir">~'+Math.round(min)+'\' (estimé)</div>';
-    else popupText+='<div class="pop-dir">Position GPS en temps réel</div>';
-    m.bindPopup(popupText);
+    var popHtml='<div class="pop-name">🚋 '+label+' '+arrow+' '+(destFull||destShort)+'</div>';
+    popHtml+='<div class="pop-dir">Rame n°'+numVeh+'</div>';
+    if(min!==null&&min!==undefined) popHtml+='<div class="pop-dir">~'+Math.round(min)+'\' de '+(destShort||destFull)+'</div>';
+    if(charge>=0){
+        var chLabel=charge<30?'Peu fréquenté':charge<60?'Fréquenté':'Très fréquenté';
+        var chColor=charge<30?'#4CAF50':charge<60?'#FF9800':'#F44336';
+        popHtml+='<div class="pop-dir" style="color:'+chColor+'">'+chLabel+' ('+charge+'%)</div>';
+    }
+    popHtml+='<div class="pop-dir" style="opacity:.5">'+(fiable?'Temps réel':'Théorique')+'</div>';
+    m.bindPopup(popHtml);
     vehicleMarkers.push(m);
 }
+
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
 else init();
@@ -1158,7 +1132,7 @@ window.addEventListener('unhandledrejection',function(e){window._diagErrors.push
 window.runDiagnostic=function(){
     var L=function(s,m,c){logConn(s,m,c||'dim');};
     L('info','═══════════════════════════════════════════════');
-    L('info','<b>🔬 DIAGNOSTIC COMPLET v41</b>');
+    L('info','<b>🔬 DIAGNOSTIC COMPLET v42</b>');
     L('info','═══════════════════════════════════════════════');
 
     /* ── A. ENVIRONNEMENT NAVIGATEUR ── */
@@ -1490,10 +1464,10 @@ window.runDiagnostic=function(){
     L('info','aller(sens=true)→right('+LINES.T1.rightDir+') | retour(sens=false)→left('+LINES.T1.leftDir+')');
     L('info','Countdown: -1/6 toutes les 10s = -1min/min');
     L('info','Map: fetchPositions() /15s | Data: fetchAllTimes() /'+REFRESH/1000+'s');
-    L('info','Icons: fond noir, bordure=ligne, flèche orange←/bleue→');
-    L('info','SIRI: 2 appels T1+T2 → AUCUN dédoublon actuellement ⚠');
-    L('info','Fallback estimation: interpolation m/7');
-    L('info','Besançon: 19 trams physiques');
+    L('info','Icons: fond noir, bordure=ligne, flèche orange←/bleue→ + pastille affluence');
+    L('info','Positions: via numVehicule du batch getListeTemps (SIRI supprimé)');
+    L('info','Déduplication: par numVehicule, station avec min le plus bas = position');
+    L('info','Interpolation: entre station précédente et station cible selon temps');
 
     L('info','═══════════════════════════════════════════════');
     L('info','<b>FIN DIAGNOSTIC — copier le contenu ci-dessus</b>');
