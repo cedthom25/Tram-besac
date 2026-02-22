@@ -544,11 +544,11 @@ function renderFavBar(){
         if(d && (d.left.length||d.right.length)){
             if(d.left.length){
                 var t=d.left[0], m=Math.round(t.min), cls=m<=1?'now':m<=5?'soon':'later';
-                html+='<span class="fc-dir left">←'+lShort+'</span><span class="fc-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span> ';
+                html+='<span class="fc-dir left">←'+lShort+'</span><span class="fc-time '+cls+'">'+fmtMin(t.min)+'</span> ';
             }
             if(d.right.length){
                 var t=d.right[0], m=Math.round(t.min), cls=m<=1?'now':m<=5?'soon':'later';
-                html+='<span class="fc-dir right">'+rShort+'→</span><span class="fc-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span>';
+                html+='<span class="fc-dir right">'+rShort+'→</span><span class="fc-time '+cls+'">'+fmtMin(t.min)+'</span>';
             }
         } else { html+='<span class="fc-empty">—</span>'; }
         chip.innerHTML=html;
@@ -614,6 +614,8 @@ function haversine(lat1,lon1,lat2,lon2){
 /* ── Log ── */
 window.toggleLog=function(){logOpen=!logOpen;$('connLog').classList.toggle('open',logOpen);};
 function logConn(s,m,c){var e=$('connEntries');if(!e)return;var t=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});var ic=s==='ok'?'✅':s==='err'?'❌':s==='warn'?'⚠️':'ℹ️';var d=document.createElement('div');d.className='conn-entry';d.innerHTML='<span class="conn-time">'+t+'</span><span class="conn-status">'+ic+'</span><span class="conn-msg '+(c||'')+'">'+m+'</span>';e.appendChild(d);e.parentElement.scrollTop=e.parentElement.scrollHeight;}
+function fmtMin(m){return m<=0?'0':m<1?"<1'":Math.round(m)+"'";}
+
 function workerFetch(url){return new Promise(function(ok,ko){var t=setTimeout(function(){ko(new Error('Timeout'));},TIMEOUT);fetch(url).then(function(r){clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(ok).catch(function(e){clearTimeout(t);ko(e);});});}
 
 /* ══════════════════════════════════════════
@@ -663,7 +665,7 @@ function renderDetail(idx){
     html+='<div class="detail-section"><div class="detail-label">← '+line.leftDir+'</div>';
     if(d&&d.left.length){d.left.forEach(function(t){
         var cls=t.min<=1?'now':t.min<=5?'soon':'later';
-        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':Math.round(t.min)+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+fmtMin(t.min)+'</span><span class="dr-dest">'+t.dest+'</span>';
         html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
         if(t.charge>=0){var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';html+='<span class="dr-badge '+cc+'">'+cl+'</span>';}
         html+='</div>';
@@ -672,7 +674,7 @@ function renderDetail(idx){
     html+='<div class="detail-section"><div class="detail-label">'+line.rightDir+' →</div>';
     if(d&&d.right.length){d.right.forEach(function(t){
         var cls=t.min<=1?'now':t.min<=5?'soon':'later';
-        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+(t.min<=0?'⇢':Math.round(t.min)+"'")+'</span><span class="dr-dest">'+t.dest+'</span>';
+        html+='<div class="detail-row"><span class="dr-time time-chip '+cls+'">'+fmtMin(t.min)+'</span><span class="dr-dest">'+t.dest+'</span>';
         html+=t.fiable?'<span class="dr-badge gps">GPS</span>':'<span class="dr-badge theo">Théo.</span>';
         if(t.charge>=0){var cc=t.charge<30?'crowd-0':t.charge<70?'crowd-1':'crowd-2';var cl=t.charge<30?'Peu fréquenté':t.charge<70?'Fréquenté':'Très fréquenté';html+='<span class="dr-badge '+cc+'">'+cl+'</span>';}
         html+='</div>';
@@ -748,7 +750,7 @@ function renderTimes(tid,did,times){
     if(!times.length){te.innerHTML='<span class="no-data">—</span>';de.classList.remove('active');return;}
     te.innerHTML=times.slice(0,2).map(function(t){
         var c=t.min<=1?'now':t.min<=5?'soon':'later';
-        var label=t.min<=1?'⇢':Math.round(t.min)+"'";
+        var label=fmtMin(t.min);
         var sd=t.dest.length>12?t.dest.substring(0,11)+'…':t.dest;
         return '<span class="time-chip '+c+'">'+label+'<span class="dest-hint">'+sd+'</span></span>';
     }).join('');
@@ -852,6 +854,7 @@ function toggleMapLine(line){
     if(btn) btn.classList.toggle('off',!mapLineFilter[line]);
     fetchPositions();
 }
+window.toggleMapLine=toggleMapLine;
 var listElements=['favBar','tabs-wrap','trafficBanner','dirBar-wrap','stateContainer','stationsWrapOuter','noService','controlsWrap','legendWrap','creditsWrap'];
 
 window.toggleMapView=function(){
@@ -941,13 +944,10 @@ function initMap(){
                 }
             });
 
-            // Draw each track segment with dual offset (orange ← / blue →)
+            // Draw each track segment as single centered line
             osmData.tracks.forEach(function(seg){
                 if(seg.length<2) return;
-                var left=offsetLine(seg,OFF);
-                var right=offsetLine(seg,-OFF);
-                L.polyline(left,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
-                L.polyline(right,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
+                L.polyline(seg,{color:'#00A5C2',weight:3,opacity:.7}).addTo(mapInstance);
                 seg.forEach(function(p){allBounds.push(p);});
             });
 
@@ -956,19 +956,13 @@ function initMap(){
             logConn('warn','⚠ OSM indisponible, tracé simplifié','warn');
             var stCoords=LINES.T1.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
             if(stCoords.length>1){
-                var fL=offsetLine(stCoords,OFF);
-                var fR=offsetLine(stCoords,-OFF);
-                L.polyline(fL,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
-                L.polyline(fR,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
+                L.polyline(stCoords,{color:'#00A5C2',weight:3,opacity:.7}).addTo(mapInstance);
                 stCoords.forEach(function(p){allBounds.push(p);});
             }
             // T2 branch
             var t2b=['Parc Micaud','Flore','Gare Viotte'].map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
             if(t2b.length>1){
-                var bL=offsetLine(t2b,OFF);
-                var bR=offsetLine(t2b,-OFF);
-                L.polyline(bL,{color:'#FF8C00',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
-                L.polyline(bR,{color:'#4A9FFF',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
+                L.polyline(t2b,{color:'#006D78',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
                 t2b.forEach(function(p){allBounds.push(p);});
             }
         }
@@ -992,13 +986,45 @@ function initMap(){
         if(allBounds.length) mapInstance.fitBounds(L.latLngBounds(allBounds).pad(0.05));
     }
 
-    // Load OSM geometry from worker, then draw
-    logConn('info','Chargement géométrie OSM…','dim');
-    workerFetch(WORKER+'?method=osm').then(function(data){
-        if(data&&data.ok) drawTracksAndStations(data);
-        else drawTracksAndStations(null);
-    }).catch(function(){
-        drawTracksAndStations(null);
+    // Load station coords from Ginko API (guaranteed accurate), then OSM geometry, then draw
+    logConn('info','Chargement coordonnées stations…','dim');
+    // Fetch T1+T2 batch to get real lat/lon for ALL stations (especially Flore, Gare Viotte)
+    var cT1=WORKER+'?method=batch&noms='+encodeURIComponent(LINES.T1.stations.join(','))+'&ligne=101&nb=1';
+    var cT2=WORKER+'?method=batch&noms='+encodeURIComponent(LINES.T2.stations.join(','))+'&ligne=102&nb=1';
+    Promise.all([
+        workerFetch(cT1).catch(function(){return {};}),
+        workerFetch(cT2).catch(function(){return {};})
+    ]).then(function(res){
+        // Update COORDS from API responses
+        var updated=0;
+        res.forEach(function(data){
+            ['aller','retour'].forEach(function(dir){
+                var d=data[dir];
+                if(!d||!d.ok||!d.objets) return;
+                d.objets.forEach(function(lieu){
+                    if(typeof lieu.latitude!=='number'||typeof lieu.longitude!=='number'||lieu.latitude===0) return;
+                    var parts=(lieu.nomExact||'').split(/\s*-\s*/);
+                    var shortName=parts[parts.length-1].trim();
+                    var nn=norm(shortName);
+                    Object.keys(COORDS).forEach(function(ck){
+                        if(norm(ck)===nn){
+                            COORDS[ck]=[lieu.latitude,lieu.longitude];
+                            updated++;
+                        }
+                    });
+                });
+            });
+        });
+        logConn('ok','📍 '+updated+' stations mises à jour depuis API Ginko','ok');
+
+        // Now load OSM geometry for track drawing
+        logConn('info','Chargement géométrie OSM…','dim');
+        return workerFetch(WORKER+'?method=osm').then(function(data){
+            if(data&&data.ok) drawTracksAndStations(data);
+            else drawTracksAndStations(null);
+        }).catch(function(){
+            drawTracksAndStations(null);
+        });
     });
 
     // Show/hide tooltips on zoom
@@ -1027,7 +1053,7 @@ function updatePopup(name,marker){
             html+='<div class="pop-dir">← '+line.leftDir+'</div>';
             d.left.slice(0,2).forEach(function(t){
                 var m=Math.round(t.min),cls=m<=1?'now':m<=5?'soon':'later';
-                html+='<span class="pop-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span> ';
+                html+='<span class="pop-time '+cls+'">'+fmtMin(t.min)+'</span> ';
             });
             html+='<br>';
         }
@@ -1035,7 +1061,7 @@ function updatePopup(name,marker){
             html+='<div class="pop-dir">'+line.rightDir+' →</div>';
             d.right.slice(0,2).forEach(function(t){
                 var m=Math.round(t.min),cls=m<=1?'now':m<=5?'soon':'later';
-                html+='<span class="pop-time '+cls+'">'+(m<=1?'⇢':m+"'")+'</span> ';
+                html+='<span class="pop-time '+cls+'">'+fmtMin(t.min)+'</span> ';
             });
         }
     }
