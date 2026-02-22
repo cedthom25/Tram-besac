@@ -1122,6 +1122,7 @@ function fetchPositions(){
                         if(!vehicleSightings[vk]) vehicleSightings[vk]=[];
                         vehicleSightings[vk].push({
                             min:t.tempsEnMinute,
+                            sec:t.tempsEnSeconde||t.tempsEnMinute*60,
                             station:lieu.nomExact,
                             dest:t.destination||'?',
                             sensAller:t.sensAller,
@@ -1140,10 +1141,10 @@ function fetchPositions(){
         var vehicles={};
         Object.keys(vehicleSightings).forEach(function(vk){
             var sights=vehicleSightings[vk];
-            sights.sort(function(a,b){return a.min-b.min;});
+            sights.sort(function(a,b){return a.sec-b.sec;});
             var best=sights[0];
             best.nextStation=sights.length>1?sights[1].station:null;
-            best.nextMin=sights.length>1?sights[1].min:null;
+            best.nextSec=sights.length>1?sights[1].sec:null;
             vehicles[vk]=best;
         });
 
@@ -1164,15 +1165,15 @@ function fetchPositions(){
             var c0=COORDS[stKey];
             var lat=c0[0],lng=c0[1];
 
-            // Interpolate using real travel time between 2 consecutive stations
-            if(v.min>0&&v.nextStation&&v.nextMin!==null){
+            // Interpolate using real travel time in seconds between 2 consecutive stations
+            if(v.sec>0&&v.nextStation&&v.nextSec!==null){
                 var nextKey=matchApiStation(v.nextStation);
                 if(nextKey){
                     var cNext=COORDS[nextKey];
                     if(cNext){
-                        var travelTime=v.nextMin-v.min; // real time between stations
-                        if(travelTime>0){
-                            var frac=v.min/travelTime; // 0=at station, 1=at next station
+                        var travelSec=v.nextSec-v.sec; // real seconds between stations
+                        if(travelSec>0){
+                            var frac=v.sec/travelSec; // 0=at station, 1=at next station
                             frac=Math.min(frac,0.95);
                             lat=c0[0]+(cNext[0]-c0[0])*frac;
                             lng=c0[1]+(cNext[1]-c0[1])*frac;
