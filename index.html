@@ -475,7 +475,7 @@
 'use strict';
 
 var WORKER='https://cold-rain-f589.cedric-thomas6.workers.dev';
-var REFRESH=10000, TIMEOUT=15000;
+var REFRESH=5000, TIMEOUT=15000;
 
 var COORDS={
 'Hauts du Chazal':[47.221559,5.951348],'UFR Santé':[47.223725,5.956143],
@@ -876,7 +876,7 @@ window.toggleMapView=function(){
         if(!mapInstance) initMap();
         setTimeout(function(){mapInstance.invalidateSize();},100);
         fetchPositions();
-        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,10000);
+        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,5000);
     } else {
         if(mapPositionTimer){clearInterval(mapPositionTimer);mapPositionTimer=null;}
     }
@@ -1130,7 +1130,9 @@ function fetchPositions(){
                                 numLigne:t.numLignePublic||lineName,
                                 charge:typeof t.tauxDeCharge==='number'?t.tauxDeCharge:-1,
                                 fiable:t.fiable!==false,
-                                numVeh:vk
+                                numVeh:vk,
+                                gpsLat:typeof t.latitude==='number'?t.latitude:null,
+                                gpsLon:typeof t.longitude==='number'?t.longitude:null
                             };
                         }
                     });
@@ -1153,24 +1155,10 @@ function fetchPositions(){
             var stKey=matchApiStation(v.station);
             if(!stKey) return;
             var c0=COORDS[stKey];
-            var lat=c0[0],lng=c0[1];
 
-            // Interpolate position between previous station and target station
-            var stIdx=findStationIdx(line,v.station);
-            if(stIdx>=0&&v.min>=1){
-                var sts=LINES[line]?LINES[line].stations:null;
-                if(sts){
-                    var prevIdx=v.sensAller?(stIdx-1):(stIdx+1);
-                    if(prevIdx>=0&&prevIdx<sts.length){
-                        var cPrev=COORDS[sts[prevIdx]];
-                        if(cPrev){
-                            var frac=Math.min(v.min/5,0.85);
-                            lat=c0[0]+(cPrev[0]-c0[0])*frac;
-                            lng=c0[1]+(cPrev[1]-c0[1])*frac;
-                        }
-                    }
-                }
-            }
+            // Use real GPS coordinates from API
+            var lat=(v.gpsLat&&v.gpsLon)?v.gpsLat:c0[0];
+            var lng=(v.gpsLat&&v.gpsLon)?v.gpsLon:c0[1];
 
             addTramMarker(lat,lng,color,line,arrow,destShort,v.min,v.charge,numVeh,v.fiable,v.dest);
         });
