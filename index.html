@@ -440,13 +440,13 @@
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
-            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v40 · <span id="vehicleCount">…</span></div>
+            <div class="ml-row" style="opacity:.4;font-size:8px;margin-top:2px">v41-diag · <span id="vehicleCount">…</span></div>
         </div>
     </div>
 
     <div class="conn-log" id="connLog">
         <div class="conn-log-inner">
-            <div class="conn-title">Journal de connexion</div>
+            <div class="conn-title">Journal de connexion <button onclick="runDiagnostic()" style="margin-left:10px;padding:2px 8px;font-size:10px;border-radius:4px;border:1px solid #555;background:#222;color:#0f0;cursor:pointer">🔬 DIAGNOSTIC COMPLET</button></div>
             <div id="connEntries"></div>
         </div>
     </div>
@@ -979,9 +979,18 @@ function fetchPositions(){
         var lineColors=['#00A5C2','#006D78'];
         results.forEach(function(data,idx){
             var label=lineLabels[idx];
+            // === DEBUG BRUT ===
+            if(data&&data._debug){
+                data._debug.forEach(function(d){
+                    logConn('info','  ['+label+' debug] '+d.label+': '+(d.count!==undefined?d.count+' véhicules':'status='+d.status+' len='+d.len),'dim');
+                    if(d.sample) logConn('info','    sample: ref='+d.sample.vehicleRef+' dest="'+d.sample.destination+'" dir="'+d.sample.direction+'" lat='+d.sample.latitude+' lng='+d.sample.longitude,'dim');
+                });
+            }
             if(data&&data.ok&&data.objets&&data.objets.length){
                 logConn('ok','SIRI '+label+': '+data.objets.length+' véhicules GPS','ok');
-                data.objets.forEach(function(v){
+                // Log EACH vehicle for diagnosis
+                data.objets.forEach(function(v,vi){
+                    logConn('info','  '+label+'['+vi+'] ref='+v.vehicleRef+' dest="'+v.destination+'" dir="'+v.direction+'" lat='+v.latitude+' lng='+v.longitude+' bearing='+v.bearing,'dim');
                     siriVehicles.push({
                         lat:v.latitude, lng:v.longitude,
                         dest:v.destination||'?', dir:v.direction||'',
@@ -994,6 +1003,21 @@ function fetchPositions(){
                 logConn('warn','SIRI '+label+': ∅ ('+reason+')','warn');
             }
         });
+
+        // === ANALYSE DOUBLONS ===
+        var refMap={};
+        siriVehicles.forEach(function(v){
+            if(!refMap[v.ref]) refMap[v.ref]=[];
+            refMap[v.ref].push(v.line);
+        });
+        var uniqueRefs=Object.keys(refMap);
+        var dupes=uniqueRefs.filter(function(r){return refMap[r].length>1;});
+        logConn('info','📊 Total: '+siriVehicles.length+' entrées, '+uniqueRefs.length+' vehicleRef uniques, '+dupes.length+' doublons','dim');
+        if(dupes.length>0){
+            dupes.forEach(function(r){
+                logConn('warn','  ⚠ doublon ref='+r+' dans: '+refMap[r].join('+'),'warn');
+            });
+        }
 
         if(siriVehicles.length>0){
             // === USE REAL SIRI GPS DATA ===
@@ -1122,6 +1146,360 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else init();
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(function(){});}
+
+/* ══════════════════════════════════════════
+   DIAGNOSTIC COMPLET
+   ══════════════════════════════════════════ */
+// Global error capture
+window._diagErrors=[];
+window.addEventListener('error',function(e){window._diagErrors.push(e.message+' @ '+e.filename+':'+e.lineno);});
+window.addEventListener('unhandledrejection',function(e){window._diagErrors.push('Promise: '+(e.reason?e.reason.message||e.reason:'?'));});
+
+window.runDiagnostic=function(){
+    var L=function(s,m,c){logConn(s,m,c||'dim');};
+    L('info','═══════════════════════════════════════════════');
+    L('info','<b>🔬 DIAGNOSTIC COMPLET v41</b>');
+    L('info','═══════════════════════════════════════════════');
+
+    /* ── A. ENVIRONNEMENT NAVIGATEUR ── */
+    L('info','<b>🅰️ ENVIRONNEMENT</b>');
+    L('info','UA: '+navigator.userAgent);
+    L('info','Écran: '+screen.width+'×'+screen.height+' · pixelRatio='+window.devicePixelRatio);
+    L('info','Viewport: '+window.innerWidth+'×'+window.innerHeight);
+    L('info','Tactile: '+('ontouchstart' in window)+' · maxTouchPoints='+navigator.maxTouchPoints);
+    L('info','Connexion: '+(navigator.connection?navigator.connection.effectiveType+' downlink='+navigator.connection.downlink+'Mbps rtt='+navigator.connection.rtt+'ms':'API non dispo'));
+    L('info','Online: '+navigator.onLine);
+    L('info','Langue: '+navigator.language);
+    L('info','localStorage: '+(function(){try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return 'OK';}catch(e){return 'ERREUR: '+e.message;}})());
+    L('info','Date: '+new Date().toLocaleString('fr-FR')+' (TZ: '+Intl.DateTimeFormat().resolvedOptions().timeZone+')');
+
+    /* ── B. SERVICE WORKER & PWA ── */
+    L('info','<b>🅱️ SERVICE WORKER & PWA</b>');
+    if('serviceWorker' in navigator){
+        navigator.serviceWorker.getRegistrations().then(function(regs){
+            L('info','SW registrations: '+regs.length);
+            regs.forEach(function(r){
+                L('info','  scope='+r.scope+' state='+(r.active?r.active.state:'∅'));
+                L('info','  scriptURL='+(r.active?r.active.scriptURL:'∅'));
+                L('info','  waiting='+(r.waiting?'OUI':'non')+' installing='+(r.installing?'OUI':'non'));
+            });
+        });
+        L('info','Controller: '+(navigator.serviceWorker.controller?navigator.serviceWorker.controller.scriptURL:'aucun'));
+    } else { L('warn','ServiceWorker non supporté'); }
+    if('caches' in window){
+        caches.keys().then(function(names){
+            L('info','Caches: '+(names.length?names.join(', '):'aucun'));
+            names.forEach(function(n){
+                caches.open(n).then(function(c){
+                    c.keys().then(function(reqs){
+                        L('info','  "'+n+'": '+reqs.length+' fichiers');
+                        reqs.slice(0,10).forEach(function(r){L('info','    '+r.url.split('/').pop());});
+                        if(reqs.length>10) L('info','    …et '+(reqs.length-10)+' autres');
+                    });
+                });
+            });
+        });
+    }
+    var mLink=document.querySelector('link[rel="manifest"]');
+    L('info','Manifest: '+(mLink?mLink.href:'❌ absent'));
+    // Check if standalone PWA
+    L('info','Mode PWA: '+(window.matchMedia('(display-mode: standalone)').matches?'standalone ✅':'navigateur'));
+
+    /* ── C. DOM & RENDU ── */
+    L('info','<b>🅲 DOM & RENDU</b>');
+    var domChecks=['stationsBody','mapView','favBar','trafficBanner','connLog','connEntries','vehicleCount','updateInfo','liveDot','refreshBtn','dirLeft','dirRight','noService','legendRight'];
+    var domOk=0,domFail=0;
+    domChecks.forEach(function(id){
+        var el=document.getElementById(id);
+        if(el){domOk++;} else {domFail++;L('err','  #'+id+': ❌ MANQUANT');}
+    });
+    L(domFail?'warn':'ok','DOM: '+domOk+'✅ '+domFail+'❌ sur '+domChecks.length+' éléments');
+    // Tram pill rendering
+    var tramPills=document.querySelectorAll('.leaflet-tram-pill');
+    L('info','Icônes tram pill DOM: '+tramPills.length);
+    if(tramPills.length>0){
+        var pill=tramPills[0];
+        var cs=window.getComputedStyle(pill);
+        L('info','  Container: '+pill.offsetWidth+'×'+pill.offsetHeight+' overflow='+cs.overflow+' bg='+cs.backgroundColor);
+        var inner=pill.querySelector('div');
+        if(inner){
+            var ics=window.getComputedStyle(inner);
+            L('info','  Inner pill: '+inner.offsetWidth+'×'+inner.offsetHeight+' display='+ics.display+' radius='+ics.borderRadius+' bg='+ics.backgroundColor);
+            L('info','  Inner HTML: '+inner.innerHTML.substring(0,100));
+        }
+    }
+    var divIcons=document.querySelectorAll('.leaflet-div-icon');
+    if(divIcons.length>0){
+        var dic=window.getComputedStyle(divIcons[0]);
+        L('info','leaflet-div-icon: '+divIcons.length+' total | overflow='+dic.overflow+' bg='+dic.backgroundColor);
+    }
+    var sRows=document.querySelectorAll('.s-row');
+    L('info','Lignes table: '+sRows.length);
+
+    /* ── D. CARTE LEAFLET ── */
+    L('info','<b>🅳 CARTE LEAFLET</b>');
+    if(typeof mapInstance!=='undefined'&&mapInstance){
+        L('ok','Map initialisée');
+        L('info','  Leaflet: '+(typeof window.L.version!=='undefined'?window.L.version:'?'));
+        L('info','  Zoom='+mapInstance.getZoom()+' Center='+mapInstance.getCenter().lat.toFixed(5)+','+mapInstance.getCenter().lng.toFixed(5));
+        var bds=mapInstance.getBounds();
+        L('info','  Bounds: SW('+bds.getSouthWest().lat.toFixed(4)+','+bds.getSouthWest().lng.toFixed(4)+') NE('+bds.getNorthEast().lat.toFixed(4)+','+bds.getNorthEast().lng.toFixed(4)+')');
+        L('info','  vehicleMarkers: '+vehicleMarkers.length);
+        L('info','  stationMarkers: '+stationMarkers.length);
+        var lc=0; mapInstance.eachLayer(function(){lc++;}); L('info','  Total layers: '+lc);
+        // Tile layer check
+        var tileOk=false;
+        mapInstance.eachLayer(function(ly){if(ly._url)tileOk=true;});
+        L(tileOk?'ok':'warn','  Tuiles: '+(tileOk?'chargées':'non trouvées'));
+    } else {
+        L('warn','Map non initialisée (ouvrir la vue carte)');
+    }
+
+    /* ── E. GÉOLOCALISATION ── */
+    L('info','<b>🅴 GÉOLOCALISATION</b>');
+    L('info','API: '+('geolocation' in navigator)+' | geoActive='+geoActive+' watchId='+geoWatchId+' nearestIdx='+nearestIdx);
+    if(typeof userMarker!=='undefined'&&userMarker){
+        L('ok','userMarker: '+userMarker.getLatLng().lat.toFixed(6)+','+userMarker.getLatLng().lng.toFixed(6));
+    } else { L('info','userMarker: non créé'); }
+
+    /* ── F. DONNÉES LOCALES ── */
+    L('info','<b>🅵 DONNÉES EN MÉMOIRE</b>');
+    L('info','currentLine='+currentLine+' | openDetail='+openDetail+' | isLoading='+isLoading);
+    var sdKeys=Object.keys(stationData);
+    L('info','stationData: '+sdKeys.length+' clés ('+Math.round(JSON.stringify(stationData).length/1024)+' KB)');
+    var tL=0,tR=0;
+    sdKeys.forEach(function(k){tL+=stationData[k].left.length;tR+=stationData[k].right.length;});
+    L('info','  Départs: gauche='+tL+' droite='+tR+' total='+(tL+tR));
+    L('info','Favoris: '+JSON.stringify(getFavs()));
+    L('info','Timers: refreshTimer='+(refreshTimer?'✅':'❌')+' mapPositionTimer='+(mapPositionTimer?'✅':'❌'));
+
+    /* ── G. CONFIG LIGNES & COORDS ── */
+    L('info','<b>🅶 CONFIG LIGNES & COORDS</b>');
+    L('info','T1: '+LINES.T1.stations.length+' stations, id='+LINES.T1.id+', ←"'+LINES.T1.leftDir+'" →"'+LINES.T1.rightDir+'"');
+    L('info','T2: '+LINES.T2.stations.length+' stations, id='+LINES.T2.id+', ←"'+LINES.T2.leftDir+'" →"'+LINES.T2.rightDir+'"');
+    var allSt={};
+    ['T1','T2'].forEach(function(k){LINES[k].stations.forEach(function(s){if(!allSt[s])allSt[s]=[];allSt[s].push(k);});});
+    var shared=Object.keys(allSt).filter(function(s){return allSt[s].length>1;});
+    L('info','Partagées T1∩T2: '+shared.length+' ('+shared.join(', ')+')');
+    var t2o=LINES.T2.stations.filter(function(s){return LINES.T1.stations.indexOf(s)<0;});
+    L('info','T2 only: '+t2o.join(', '));
+    var mc=[];
+    Object.keys(allSt).forEach(function(s){if(!COORDS[s])mc.push(s);});
+    L(mc.length?'warn':'ok','COORDS: '+(mc.length?'⚠ manquantes: '+mc.join(', '):'✅ '+Object.keys(COORDS).length+' entrées'));
+    L('info','Worker: '+WORKER+' | Refresh='+REFRESH/1000+'s Timeout='+TIMEOUT/1000+'s');
+
+    /* ── H. WORKER + ETAT ── */
+    L('info','<b>🅷 WORKER + ETAT LIGNES</b>');
+    var tw0=Date.now();
+    workerFetch(WORKER+'?method=etat').then(function(data){
+        L('ok','Latence: '+(Date.now()-tw0)+'ms');
+        if(data.objets){
+            data.objets.forEach(function(e){
+                L('info','  '+e.numLignePublic+' id='+e.idLigne+' etat='+e.etat);
+                L('info','    Tous champs: '+JSON.stringify(e).substring(0,500));
+            });
+        }
+    }).catch(function(e){L('err','ERREUR: '+e.message);});
+
+    /* ── I. DR/getLignes ── */
+    L('info','<b>🅸 METADATA (DR/getLignes)</b>');
+    workerFetch(WORKER+'?method=lignes').then(function(data){
+        L(data.ok?'ok':'warn','ok='+data.ok+(data.msg?' → '+data.msg:''));
+        if(data.ok&&data.objets){
+            var li=Array.isArray(data.objets)?data.objets:[data.objets];
+            li.forEach(function(l){
+                if(l.idLigne==='101'||l.idLigne==='102'||l.numLignePublic==='T1'||l.numLignePublic==='T2'){
+                    L('info','  TRAM: '+JSON.stringify(l).substring(0,500));
+                }
+            });
+            L('info','  Total lignes: '+li.length);
+        }
+    }).catch(function(e){L('warn','erreur: '+e.message);});
+
+    /* ── J+K+L. SIRI — ALL + T1 + T2 + ANALYSE CROISÉE ── */
+    L('info','<b>🅹 SIRI ALL (sans filtre LineRef)</b>');
+    L('info','<b>🅺 SIRI T1 + T2 (avec filtre)</b>');
+    var pAll=workerFetch(WORKER+'?method=allpositions').catch(function(e){return {ok:false,err:e.message};});
+    var pT1=workerFetch(WORKER+'?method=positions&ligne=101').catch(function(e){return {ok:false,err:e.message};});
+    var pT2=workerFetch(WORKER+'?method=positions&ligne=102').catch(function(e){return {ok:false,err:e.message};});
+    Promise.all([pAll,pT1,pT2]).then(function(res){
+        var dataAll=res[0],dataT1=res[1],dataT2=res[2];
+
+        // ALL
+        L('info','── SIRI ALL ──');
+        if(dataAll._debug){
+            dataAll._debug.forEach(function(d){
+                L('info','  debug: '+d.label+' '+(d.count!==undefined?'count='+d.count:'status='+d.status+' len='+d.len));
+                if(d.preview) L('info','    XML: '+d.preview.substring(0,500).replace(/</g,'&lt;'));
+            });
+        }
+        if(dataAll.ok&&dataAll.objets){
+            L('ok','SIRI ALL: <b>'+dataAll.objets.length+' véhicules</b>');
+            dataAll.objets.forEach(function(v,i){
+                L('info','  ['+i+'] ref=<b>'+v.vehicleRef+'</b> lineRef=<b>'+v.lineRef+'</b> dest="'+v.destination+'" destRef="'+v.destinationRef+'" dir="'+v.direction+'"');
+                L('info','       origin="'+v.originName+'" originRef='+v.originRef+' bearing='+v.bearing+' pos=('+v.latitude+','+v.longitude+') monitored='+v.monitored);
+                L('info','       delay='+v.delay+' recorded='+v.recordedAt+' validUntil='+v.validUntil+' operator='+v.operatorRef);
+            });
+            // Par LineRef
+            var byLine={};
+            dataAll.objets.forEach(function(v){var lr=v.lineRef||'?'; if(!byLine[lr])byLine[lr]=[];byLine[lr].push(v);});
+            L('info','<b>Par LineRef:</b>');
+            Object.keys(byLine).forEach(function(lr){
+                L('info','  "'+lr+'": '+byLine[lr].length+' véhicules → '+byLine[lr].map(function(v){return v.vehicleRef;}).join(', '));
+            });
+            var ds={},di={},or={};
+            dataAll.objets.forEach(function(v){ds[v.destination]=true;di[v.direction]=true;if(v.originName)or[v.originName]=true;});
+            L('info','Destinations uniques: '+Object.keys(ds).join(' | '));
+            L('info','Directions uniques: '+Object.keys(di).join(' | '));
+            L('info','Origines uniques: '+Object.keys(or).join(' | '));
+            if(dataAll.objets[0]&&dataAll.objets[0].rawBlock){
+                L('info','<b>XML brut véhicule #0:</b>');
+                L('info','<pre>'+dataAll.objets[0].rawBlock.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>');
+            }
+        } else {
+            L('warn','SIRI ALL: ∅'+(dataAll.err?' ('+dataAll.err+')':''));
+        }
+
+        // T1 + T2
+        var rr=[{},{}],labs=['T1','T2'],dds=[dataT1,dataT2];
+        dds.forEach(function(data,idx){
+            var lab=labs[idx];
+            L('info','── SIRI '+lab+' (filtré) ──');
+            if(data._debug) data._debug.forEach(function(d){L('info','  '+d.label+' '+(d.count!==undefined?'count='+d.count:''));});
+            if(data.ok&&data.objets){
+                L('ok','  '+data.objets.length+' véhicules');
+                data.objets.forEach(function(v,i){
+                    L('info','  '+lab+'['+i+'] ref=<b>'+v.vehicleRef+'</b> dest="'+v.destination+'" dir="'+v.direction+'" pos=('+v.latitude+','+v.longitude+')');
+                    rr[idx][v.vehicleRef]=v;
+                });
+            } else { L('warn','  ∅'); }
+        });
+
+        // ANALYSE CROISÉE
+        L('info','<b>🅻 ANALYSE CROISÉE</b>');
+        var k1=Object.keys(rr[0]),k2=Object.keys(rr[1]);
+        var kAll=dataAll.ok&&dataAll.objets?dataAll.objets.map(function(v){return v.vehicleRef;}):[];
+        var kAS={}; kAll.forEach(function(r){kAS[r]=true;}); var kAU=Object.keys(kAS);
+        L('info','SIRI ALL unique: <b>'+kAU.length+'</b>');
+        L('info','SIRI T1 filtré: <b>'+k1.length+'</b>');
+        L('info','SIRI T2 filtré: <b>'+k2.length+'</b>');
+        L('info','T1+T2 brut: '+(k1.length+k2.length));
+        var dupes=k1.filter(function(r){return rr[1][r];});
+        L(dupes.length?'warn':'ok','<b>Doublons T1∩T2: '+dupes.length+'</b>');
+        dupes.forEach(function(r){
+            var v1=rr[0][r],v2=rr[1][r];
+            L('warn','  ref='+r+' T1:"'+v1.destination+'" T2:"'+v2.destination+'" samePos='+(v1.latitude===v2.latitude));
+        });
+        var o1=k1.filter(function(r){return !rr[1][r];}),o2=k2.filter(function(r){return !rr[0][r];});
+        if(o1.length) L('info','Seulement T1: '+o1.join(', '));
+        if(o2.length) L('info','Seulement T2: '+o2.join(', '));
+        var inAllNotFiltered=kAU.filter(function(r){return !rr[0][r]&&!rr[1][r];});
+        if(inAllNotFiltered.length) L('warn','Dans ALL mais ni T1 ni T2: '+inAllNotFiltered.join(', '));
+        L('info','<b>→ Trams physiques réels: '+kAU.length+' (Besançon en a 19)</b>');
+    });
+
+    /* ── M. BATCH T1 + T2 ── */
+    L('info','<b>🅼 BATCH getListeTemps</b>');
+    var bT1=workerFetch(WORKER+'?method=batch&noms='+encodeURIComponent(LINES.T1.stations.join(','))+'&ligne=101&nb=3').catch(function(e){return {ok:false,err:e.message};});
+    var bT2=workerFetch(WORKER+'?method=batch&noms='+encodeURIComponent(LINES.T2.stations.join(','))+'&ligne=102&nb=3').catch(function(e){return {ok:false,err:e.message};});
+    Promise.all([bT1,bT2]).then(function(res){
+        ['T1','T2'].forEach(function(lab,idx){
+            var data=res[idx];
+            L('info','── Batch '+lab+' ──');
+            if(!data.ok){L('warn','erreur'+(data.err?' '+data.err:''));return;}
+            ['aller','retour'].forEach(function(dir){
+                var d=data[dir];
+                if(!d||!d.ok||!d.objets){L('warn','  '+dir+': ∅');return;}
+                L('info','  '+dir+': '+d.objets.length+' arrêts');
+                d.objets.forEach(function(lieu){
+                    var t=(lieu.listeTemps||[]).map(function(x){
+                        return Math.round(x.tempsEnMinute)+"'→"+x.destination+(x.fiable?' GPS':' Théo')+(typeof x.tauxDeCharge==='number'?' ch='+x.tauxDeCharge:'');
+                    }).join(' | ');
+                    L('info','    "'+lieu.nomExact+'": '+(t||'∅'));
+                });
+            });
+            // Schema discovery
+            if(idx===0&&data.aller&&data.aller.objets&&data.aller.objets[0]){
+                var s=data.aller.objets[0];
+                L('info','<b>Champs arrêt:</b> '+Object.keys(s).join(', '));
+                if(s.listeTemps&&s.listeTemps[0]){
+                    L('info','<b>Champs temps:</b> '+Object.keys(s.listeTemps[0]).join(', '));
+                    L('info','Exemple complet: '+JSON.stringify(s.listeTemps[0]));
+                }
+            }
+        });
+    });
+
+    /* ── N. MATCHING NOMS ── */
+    L('info','<b>🅽 MATCHING NOMS STATIONS</b>');
+    var aN=Object.keys(stationData);
+    if(aN.length===0){ L('warn','stationData vide'); }
+    else {
+        ['T1','T2'].forEach(function(k){
+            var ok=0,fail=0;
+            LINES[k].stations.forEach(function(name){
+                var d=findStation(name),found=d&&(d.left.length||d.right.length);
+                if(found){ok++;}else{
+                    fail++;var nn=norm(name),cl=aN.filter(function(a){return a.indexOf(nn)>=0||nn.indexOf(a)>=0;});
+                    L('warn','  ❌ '+k+' "'+name+'"'+(cl.length?' ~ '+cl.join(','):''));
+                }
+            });
+            L(fail?'warn':'ok',k+': '+ok+'✅ '+fail+'❌');
+        });
+        var uk={};
+        ['T1','T2'].forEach(function(k){LINES[k].stations.forEach(function(n){uk[norm(n)]=true;});});
+        var orph=aN.filter(function(a){return !uk[a];});
+        L(orph.length?'warn':'ok','Orphelines API: '+(orph.length?orph.join(', '):'aucune'));
+    }
+
+    /* ── O. INFOTRAFIC ── */
+    L('info','<b>🅾️ INFO TRAFIC</b>');
+    workerFetch(WORKER+'?method=infotrafic').then(function(data){
+        if(data.ok&&data.objets){
+            var ii=Array.isArray(data.objets)?data.objets:[data.objets];
+            L('info',ii.length+' perturbation(s)');
+            ii.forEach(function(it){L('info','  '+JSON.stringify(it).substring(0,400));});
+        } else { L('ok','Aucune perturbation'); }
+    }).catch(function(e){L('warn','erreur: '+e.message);});
+
+    /* ── P. ERREURS JS ── */
+    L('info','<b>🅿️ ERREURS JS CAPTURÉES</b>');
+    if(window._diagErrors&&window._diagErrors.length){
+        window._diagErrors.forEach(function(e){L('err','  '+e);});
+    } else { L('ok','Aucune erreur JS'); }
+
+    /* ── Q. PERFORMANCE ── */
+    L('info','<b>🆀 PERFORMANCE ENDPOINTS</b>');
+    var eps=[
+        {n:'etat',u:'?method=etat'},
+        {n:'batch 1 station',u:'?method=temps&nom='+encodeURIComponent('République')+'&ligne=101&sens=true&nb=1'},
+        {n:'positions T1',u:'?method=positions&ligne=101'},
+        {n:'allpositions',u:'?method=allpositions'},
+        {n:'infotrafic',u:'?method=infotrafic'}
+    ];
+    eps.forEach(function(ep){
+        var s=Date.now();
+        workerFetch(WORKER+ep.u).then(function(d){
+            var ms=Date.now()-s,sz=JSON.stringify(d).length;
+            L(ms<3000?'ok':'warn','  '+ep.n+': <b>'+ms+'ms</b> '+Math.round(sz/1024)+'KB ok='+d.ok);
+        }).catch(function(e){L('err','  '+ep.n+': ERREUR '+(Date.now()-s)+'ms');});
+    });
+
+    /* ── R. VÉRIFICATIONS LOGIQUE ── */
+    L('info','<b>🆁 LOGIQUE</b>');
+    L('info','aller(sens=true)→right('+LINES.T1.rightDir+') | retour(sens=false)→left('+LINES.T1.leftDir+')');
+    L('info','Countdown: -1/6 toutes les 10s = -1min/min');
+    L('info','Map: fetchPositions() /15s | Data: fetchAllTimes() /'+REFRESH/1000+'s');
+    L('info','Icons: fond noir, bordure=ligne, flèche orange←/bleue→');
+    L('info','SIRI: 2 appels T1+T2 → AUCUN dédoublon actuellement ⚠');
+    L('info','Fallback estimation: interpolation m/7');
+    L('info','Besançon: 19 trams physiques');
+
+    L('info','═══════════════════════════════════════════════');
+    L('info','<b>FIN DIAGNOSTIC — copier le contenu ci-dessus</b>');
+    L('info','═══════════════════════════════════════════════');
+};
+
 })();
 </script>
 </body>
