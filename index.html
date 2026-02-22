@@ -458,7 +458,7 @@
 'use strict';
 
 var WORKER='https://cold-rain-f589.cedric-thomas6.workers.dev';
-var REFRESH=30000, TIMEOUT=15000;
+var REFRESH=10000, TIMEOUT=15000;
 
 var COORDS={
 'Hauts du Chazal':[47.221559,5.951348],'UFR Santé':[47.223725,5.956143],
@@ -681,6 +681,15 @@ function fetchAllTimes(){
                 // Also extract short name after " - " (API prefixes commune)
                 var parts=lieu.nomExact.split(/\s*-\s*/);
                 var shortKey=norm(parts[parts.length-1]);
+                // Update COORDS from API if available
+                if(typeof lieu.latitude==='number'&&typeof lieu.longitude==='number'&&lieu.latitude>0){
+                    var sName=parts[parts.length-1].trim();
+                    var found=false;
+                    Object.keys(COORDS).forEach(function(ck){
+                        if(norm(ck)===key||norm(ck)===shortKey){COORDS[ck]=[lieu.latitude,lieu.longitude];found=true;}
+                    });
+                    if(!found) COORDS[sName]=[lieu.latitude,lieu.longitude];
+                }
                 if(!stationData[key])stationData[key]={left:[],right:[]};
                 if(shortKey!==key){if(!stationData[shortKey])stationData[shortKey]={left:[],right:[]};}
                 (lieu.listeTemps||[]).forEach(function(t){
@@ -839,7 +848,7 @@ window.toggleMapView=function(){
         if(!mapInstance) initMap();
         setTimeout(function(){mapInstance.invalidateSize();},100);
         fetchPositions();
-        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,30000);
+        if(!mapPositionTimer) mapPositionTimer=setInterval(fetchPositions,10000);
     } else {
         if(mapPositionTimer){clearInterval(mapPositionTimer);mapPositionTimer=null;}
     }
@@ -866,40 +875,121 @@ function initMap(){
             var prev=coords[Math.max(0,i-1)], next=coords[Math.min(coords.length-1,i+1)];
             var dx=next[1]-prev[1], dy=next[0]-prev[0];
             var len=Math.sqrt(dx*dx+dy*dy)||1;
-            // perpendicular: (-dy, dx) normalized
             out.push([coords[i][0]+(-dx/len)*dist, coords[i][1]+(dy/len)*dist]);
         }
         return out;
     }
-    var OFF=0.00015; // ~15m offset
+    var OFF=0.00012; // ~12m offset
+
+    // ══ DETAILED TRACK GEOMETRY ══
+    // T1: Hauts du Chazal ↔ Chalezeule (stations + intermediate waypoints at curves)
+    var TRACK_T1=[
+        // ── Hauts du Chazal → UFR Santé (Route de Franois, NE) ──
+        [47.2216,5.9513],[47.2222,5.9528],[47.2228,5.9543],
+        [47.2237,5.9561],
+        // ── UFR Santé → Maison des Familles (NE) ──
+        [47.2245,5.9575],[47.2252,5.9588],
+        [47.2260,5.9601],
+        // ── Maison des Familles → CHU Minjoz (E along Ave Louise Michel) ──
+        [47.2262,5.9615],[47.2263,5.9628],
+        [47.2263,5.9638],
+        // ── CHU Minjoz → Île-de-France (sharp S turn down Planoise) ──
+        [47.2260,5.9642],[47.2254,5.9650],[47.2245,5.9658],[47.2235,5.9665],[47.2227,5.9670],
+        [47.2219,5.9673],
+        // ── Île-de-France → Époisses (E along ave) ──
+        [47.2220,5.9690],[47.2222,5.9708],
+        [47.2224,5.9727],
+        // ── Époisses → Allende (S drop) ──
+        [47.2218,5.9730],[47.2210,5.9732],
+        [47.2198,5.9734],
+        // ── Allende → Micropolis (ENE) ──
+        [47.2200,5.9750],[47.2203,5.9768],
+        [47.2206,5.9782],
+        // ── Micropolis → Malcombe (NE along Rue de Dole) ──
+        [47.2212,5.9795],[47.2218,5.9810],
+        [47.2225,5.9824],
+        // ── Malcombe → Rosemont (long NE, Rue de Dole) ──
+        [47.2232,5.9850],[47.2238,5.9880],[47.2243,5.9905],[47.2250,5.9935],[47.2255,5.9955],
+        [47.2260,5.9973],
+        // ── Rosemont → Brulard (NE) ──
+        [47.2265,5.9995],[47.2270,6.0015],[47.2275,6.0035],[47.2280,6.0050],
+        [47.2285,6.0060],
+        // ── Brulard → Polygone (E) ──
+        [47.2288,6.0075],[47.2292,6.0090],
+        [47.2297,6.0108],
+        // ── Polygone → Chamars (NE toward Doubs, Bvd Charles de Gaulle) ──
+        [47.2305,6.0125],[47.2313,6.0145],[47.2322,6.0165],[47.2330,6.0185],
+        [47.2337,6.0203],
+        // ── Chamars → Canot (NW along Quai Vauban) ──
+        [47.2342,6.0198],[47.2348,6.0188],[47.2354,6.0175],
+        [47.2360,6.0159],
+        // ── Canot → Battant (N across Pont Battant) ──
+        [47.2368,6.0162],[47.2377,6.0170],[47.2385,6.0180],
+        [47.2394,6.0194],
+        // ── Battant → Révolution (E) ──
+        [47.2398,6.0205],[47.2401,6.0217],
+        [47.2404,6.0228],
+        // ── Révolution → République (E) ──
+        [47.2406,6.0245],[47.2408,6.0260],
+        [47.2409,6.0272],
+        // ── République → Parc Micaud (NE along river) ──
+        [47.2414,6.0280],[47.2420,6.0288],
+        [47.2428,6.0298],
+        // ── Parc Micaud → Fontaine Argent (NE) ──
+        [47.2433,6.0303],[47.2438,6.0308],
+        [47.2443,6.0312],
+        // ── Fontaine Argent → Tristan Bernard (NE, Rue de Belfort) ──
+        [47.2448,6.0320],[47.2453,6.0330],
+        [47.2460,6.0338],
+        // ── Tristan Bernard → Brûlefoin (NE) ──
+        [47.2467,6.0348],[47.2474,6.0358],
+        [47.2481,6.0371],
+        // ── Brûlefoin → Les Vaîtes (NE) ──
+        [47.2487,6.0388],[47.2492,6.0405],
+        [47.2498,6.0423],
+        // ── Les Vaîtes → Schweitzer (N) ──
+        [47.2506,6.0427],[47.2515,6.0429],[47.2522,6.0430],
+        [47.2530,6.0431],
+        // ── Schweitzer → Croix de Palente (N) ──
+        [47.2540,6.0436],[47.2550,6.0442],
+        [47.2560,6.0448],
+        // ── Croix de Palente → Lilas (NW curve) ──
+        [47.2570,6.0450],[47.2580,6.0448],[47.2590,6.0440],[47.2598,6.0430],
+        [47.2606,6.0417],
+        // ── Lilas → Orchamps (NE) ──
+        [47.2613,6.0425],[47.2620,6.0438],
+        [47.2629,6.0452],
+        // ── Orchamps → Fort Benoît (E then SE) ──
+        [47.2630,6.0468],[47.2628,6.0485],
+        [47.2621,6.0505],
+        // ── Fort Benoît → Marnières (E) ──
+        [47.2624,6.0520],[47.2628,6.0538],
+        [47.2633,6.0555],
+        // ── Marnières → Chalezeule (SE) ──
+        [47.2630,6.0572],[47.2624,6.0590],
+        [47.2614,6.0609]
+    ];
+
+    // T2 branch: Parc Micaud → Flore → Gare Viotte
+    var TRACK_T2_BRANCH=[
+        [47.2428,6.0298], // Parc Micaud (junction)
+        [47.2432,6.0296],[47.2436,6.0293],[47.2440,6.0290],
+        [47.2448,6.0282], // Flore
+        [47.2452,6.0272],[47.2456,6.0260],[47.2460,6.0248],[47.2465,6.0235],
+        [47.2471,6.0219]  // Gare Viotte
+    ];
 
     // Draw T1 dual tracks
-    var t1Coords=LINES.T1.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
-    var t1Left=offsetLine(t1Coords,OFF);   // ← vers HdC (orange)
-    var t1Right=offsetLine(t1Coords,-OFF); // → vers Chalezeule (bleu)
+    var t1Left=offsetLine(TRACK_T1,OFF);
+    var t1Right=offsetLine(TRACK_T1,-OFF);
     L.polyline(t1Left,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
     L.polyline(t1Right,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
 
-    // Draw T2 dual tracks (only the branch: Parc Micaud → Flore → Gare Viotte)
-    var t2Coords=LINES.T2.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
-    // T2 shares track with T1 up to Parc Micaud, then diverges
-    // Find where T2 diverges (stations not in T1)
-    var t2Only=[];
-    var t1Set={};LINES.T1.stations.forEach(function(n){t1Set[n]=true;});
-    var diverged=false;
-    LINES.T2.stations.forEach(function(n){
-        if(!t1Set[n]) diverged=true;
-        if(diverged){var c=COORDS[n];if(c)t2Only.push([c[0],c[1]]);}
-    });
-    // Add Parc Micaud as start of the branch
-    var pmC=COORDS['Parc Micaud'];
-    if(pmC&&t2Only.length) t2Only.unshift([pmC[0],pmC[1]]);
-    if(t2Only.length>1){
-        var t2Left=offsetLine(t2Only,OFF);
-        var t2Right=offsetLine(t2Only,-OFF);
-        L.polyline(t2Left,{color:'#FF8C00',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
-        L.polyline(t2Right,{color:'#4A9FFF',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
-    }
+    // Draw T2 branch dual tracks (dashed)
+    var t2Left=offsetLine(TRACK_T2_BRANCH,OFF);
+    var t2Right=offsetLine(TRACK_T2_BRANCH,-OFF);
+    L.polyline(t2Left,{color:'#FF8C00',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
+    L.polyline(t2Right,{color:'#4A9FFF',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
 
     // Station markers with tooltips
     var allStations={};
@@ -931,7 +1021,7 @@ function initMap(){
     updateLabels();
 
     // Fit bounds
-    var allCoords=t1Coords.concat(t2Coords);
+    var allCoords=TRACK_T1.concat(TRACK_T2_BRANCH);
     if(allCoords.length) mapInstance.fitBounds(L.latLngBounds(allCoords).pad(0.05));
 }
 
@@ -1091,7 +1181,7 @@ function addTramMarker(lat,lng,bgCol,label,arrow,destShort,min,charge,numVeh,fia
         else if(charge<60) chargeIcon='<span style="color:#FF9800;font-size:8px;margin-left:2px">●</span>';
         else chargeIcon='<span style="color:#F44336;font-size:8px;margin-left:2px">●</span>';
     }
-    var html='<div style="display:inline-flex;align-items:center;gap:1px;padding:3px 7px;border-radius:14px;font-size:12px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid '+bgCol+';white-space:nowrap;background:rgba(15,15,22,.92);">'
+    var html='<div style="display:inline-flex;align-items:center;gap:1px;padding:3px 7px;border-radius:14px;font-size:12px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid '+arrowCol+';white-space:nowrap;background:rgba(15,15,22,.92);">'
         +'🚋'+label
         +'<span style="color:'+arrowCol+';font-size:14px;font-weight:900;margin:0 1px">'+arrow+'</span>'
         +chargeIcon
