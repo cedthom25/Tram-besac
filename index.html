@@ -296,6 +296,15 @@
         }
         .map-legend .ml-row { display:flex; align-items:center; gap:6px; padding:2px 0; }
         .map-legend .ml-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+        .ml-line-btn {
+            display:flex; align-items:center; gap:5px; padding:4px 8px;
+            border-radius:6px; border:1.5px solid; cursor:pointer;
+            font-size:.6rem; font-weight:700; color:#fff; transition:opacity .2s;
+            -webkit-tap-highlight-color:transparent; user-select:none;
+        }
+        .ml-line-btn.off { opacity:.3; }
+        .ml-line-btn .ml-label { font-size:.65rem; }
+        .ml-line-btn .ml-dest { font-weight:400; opacity:.7; font-size:.5rem; }
 
         /* Leaflet custom markers */
         .leaflet-marker-icon { overflow:visible !important; }
@@ -435,9 +444,17 @@
     <div class="map-view" id="mapView">
         <div id="tramMap"></div>
         <div class="map-legend">
-            <div class="ml-row"><div class="ml-dot" style="background:#00A5C2"></div> T1 <div class="ml-dot" style="background:#006D78;margin-left:4px"></div> T2</div>
+            <div class="ml-row" style="gap:4px;margin-bottom:3px">
+                <div class="ml-line-btn" id="mlT1" style="border-color:#00A5C2;background:rgba(0,165,194,.15)" onclick="toggleMapLine('T1')">
+                    <span class="ml-label">T1</span><span class="ml-dest">HdC ↔ Chalezeule</span>
+                </div>
+                <div class="ml-line-btn" id="mlT2" style="border-color:#006D78;background:rgba(0,109,120,.15)" onclick="toggleMapLine('T2')">
+                    <span class="ml-label">T2</span><span class="ml-dest">HdC ↔ Gare Viotte</span>
+                </div>
+            </div>
             <div class="ml-row"><span style="color:#FF8C00;font-weight:700">←</span> vers HdC · <span style="color:#4A9FFF;font-weight:700">→</span> vers Chalez./Viotte</div>
             <div class="ml-row" style="gap:8px"><span style="color:#4CAF50">●</span>calme <span style="color:#FF9800">●</span>fréquenté <span style="color:#F44336">●</span>bondé</div>
+            <div class="ml-row"><span style="color:#4CAF50;font-weight:900">0</span> à quai · <span style="color:#FFC107;font-weight:700">&lt;1'</span> imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--green);box-shadow:0 0 5px var(--green-glow)"></div> Tram imminent</div>
             <div class="ml-row"><div class="ml-dot" style="background:var(--text2)"></div> Station</div>
             <div class="ml-row"><div class="ml-dot" style="background:rgba(66,133,244,.9);border:1px solid #fff"></div> Ma position (📍)</div>
@@ -827,6 +844,14 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').cat
    ══════════════════════════════════════════ */
 var mapInstance=null, mapActive=false, mapPositionTimer=null, userMarker=null;
 var vehicleMarkers=[], stationMarkers=[];
+var mapLineFilter={T1:true,T2:true};
+
+function toggleMapLine(line){
+    mapLineFilter[line]=!mapLineFilter[line];
+    var btn=document.getElementById('ml'+line);
+    if(btn) btn.classList.toggle('off',!mapLineFilter[line]);
+    fetchPositions();
+}
 var listElements=['favBar','tabs-wrap','trafficBanner','dirBar-wrap','stateContainer','stationsWrapOuter','noService','controlsWrap','legendWrap','creditsWrap'];
 
 window.toggleMapView=function(){
@@ -892,20 +917,37 @@ function initMap(){
             // Update COORDS from OSM stop positions
             (osmData.stops||[]).forEach(function(s){
                 var sn=s.name;
-                // Match to our station names
+                var snN=norm(sn);
                 var keys=Object.keys(COORDS);
+                var matched=false;
+                // Exact match
                 for(var i=0;i<keys.length;i++){
-                    if(norm(keys[i])===norm(sn)){
-                        COORDS[keys[i]]=[s.lat,s.lon];
-                        break;
+                    if(norm(keys[i])===snN){COORDS[keys[i]]=[s.lat,s.lon];matched=true;break;}
+                }
+                if(matched) return;
+                // Partial match: OSM name contains our key or vice versa
+                for(var i=0;i<keys.length;i++){
+                    var kn=norm(keys[i]);
+                    if(snN.indexOf(kn)>=0||kn.indexOf(snN)>=0){COORDS[keys[i]]=[s.lat,s.lon];matched=true;break;}
+                }
+                if(matched) return;
+                // Word match: any word in OSM name matches a key
+                var words=sn.split(/[\s\-\/]+/);
+                for(var i=0;i<keys.length;i++){
+                    var kn=norm(keys[i]);
+                    for(var w=0;w<words.length;w++){
+                        if(words[w].length>3&&norm(words[w])===kn){COORDS[keys[i]]=[s.lat,s.lon];break;}
                     }
                 }
             });
 
-            // Draw each track segment (no offset — single centered line for clean look)
+            // Draw each track segment with dual offset (orange ← / blue →)
             osmData.tracks.forEach(function(seg){
                 if(seg.length<2) return;
-                L.polyline(seg,{color:'#00BCD4',weight:4,opacity:.75}).addTo(mapInstance);
+                var left=offsetLine(seg,OFF);
+                var right=offsetLine(seg,-OFF);
+                L.polyline(left,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
+                L.polyline(right,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
                 seg.forEach(function(p){allBounds.push(p);});
             });
 
@@ -914,13 +956,19 @@ function initMap(){
             logConn('warn','⚠ OSM indisponible, tracé simplifié','warn');
             var stCoords=LINES.T1.stations.map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
             if(stCoords.length>1){
-                L.polyline(stCoords,{color:'#00BCD4',weight:4,opacity:.7}).addTo(mapInstance);
+                var fL=offsetLine(stCoords,OFF);
+                var fR=offsetLine(stCoords,-OFF);
+                L.polyline(fL,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
+                L.polyline(fR,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
                 stCoords.forEach(function(p){allBounds.push(p);});
             }
             // T2 branch
             var t2b=['Parc Micaud','Flore','Gare Viotte'].map(function(n){var c=COORDS[n];return c?[c[0],c[1]]:null;}).filter(Boolean);
             if(t2b.length>1){
-                L.polyline(t2b,{color:'#00BCD4',weight:4,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
+                var bL=offsetLine(t2b,OFF);
+                var bR=offsetLine(t2b,-OFF);
+                L.polyline(bL,{color:'#FF8C00',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
+                L.polyline(bR,{color:'#4A9FFF',weight:3,opacity:.7,dashArray:'6 4'}).addTo(mapInstance);
                 t2b.forEach(function(p){allBounds.push(p);});
             }
         }
@@ -1073,6 +1121,7 @@ function fetchPositions(){
         vehKeys.forEach(function(numVeh){
             var v=vehicles[numVeh];
             var line=v.idLigne==='101'?'T1':v.idLigne==='102'?'T2':v.numLigne;
+            if(!mapLineFilter[line]) return;
             var color=v.idLigne==='101'?'#00A5C2':'#006D78';
             var arrow=v.sensAller?'→':'←';
             var destShort=v.dest;
@@ -1124,9 +1173,21 @@ function addTramMarker(lat,lng,bgCol,label,arrow,destShort,min,charge,numVeh,fia
         else if(charge<60) chargeIcon='<span style="color:#FF9800;font-size:8px;margin-left:2px">●</span>';
         else chargeIcon='<span style="color:#F44336;font-size:8px;margin-left:2px">●</span>';
     }
+    // Determine display text: 0 at station, <1' approaching, arrow otherwise
+    var displayText=arrow;
+    var displayCol=arrowCol;
+    if(min!==null&&min!==undefined){
+        if(min===0){
+            displayText='0';
+            displayCol='#4CAF50';
+        } else if(min<1){
+            displayText="<1'";
+            displayCol='#FFC107';
+        }
+    }
     var html='<div style="display:inline-flex;align-items:center;gap:1px;padding:3px 7px;border-radius:14px;font-size:12px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid '+arrowCol+';white-space:nowrap;background:rgba(15,15,22,.92);">'
         +'🚋'+label
-        +'<span style="color:'+arrowCol+';font-size:14px;font-weight:900;margin:0 1px">'+arrow+'</span>'
+        +'<span style="color:'+displayCol+';font-size:14px;font-weight:900;margin:0 1px">'+displayText+'</span>'
         +chargeIcon
         +'</div>';
     var icon=L.divIcon({
