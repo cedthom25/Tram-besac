@@ -847,6 +847,7 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').cat
 var mapInstance=null, mapActive=false, mapPositionTimer=null, userMarker=null;
 var vehicleMarkers=[], stationMarkers=[];
 var mapLineFilter={T1:true,T2:true};
+var vehicleCache={}; // {numVeh: {data, missCount}}
 
 function toggleMapLine(line){
     mapLineFilter[line]=!mapLineFilter[line];
@@ -913,9 +914,10 @@ function initMap(){
     function drawTracksAndStations(osmData){
         var allBounds=[];
 
-        if(osmData&&osmData.tracks&&osmData.tracks.length>0){
-            // ═══ OSM REAL GEOMETRY ═══
-            logConn('ok','🗺 OSM: '+osmData.tracks.length+' segments, '+osmData.stops.length+' arrêts','ok');
+        if(osmData&&((osmData.tracksEast&&osmData.tracksEast.length)||(osmData.tracksWest&&osmData.tracksWest.length))){
+            // ═══ OSM REAL GEOMETRY (directional) ═══
+            var eLen=(osmData.tracksEast||[]).length, wLen=(osmData.tracksWest||[]).length;
+            logConn('ok','🗺 OSM: →'+eLen+' ←'+wLen+' segments, '+(osmData.stops||[]).length+' arrêts','ok');
 
             // Update COORDS from OSM stop positions
             (osmData.stops||[]).forEach(function(s){
@@ -923,18 +925,15 @@ function initMap(){
                 var snN=norm(sn);
                 var keys=Object.keys(COORDS);
                 var matched=false;
-                // Exact match
                 for(var i=0;i<keys.length;i++){
                     if(norm(keys[i])===snN){COORDS[keys[i]]=[s.lat,s.lon];matched=true;break;}
                 }
                 if(matched) return;
-                // Partial match: OSM name contains our key or vice versa
                 for(var i=0;i<keys.length;i++){
                     var kn=norm(keys[i]);
                     if(snN.indexOf(kn)>=0||kn.indexOf(snN)>=0){COORDS[keys[i]]=[s.lat,s.lon];matched=true;break;}
                 }
                 if(matched) return;
-                // Word match: any word in OSM name matches a key
                 var words=sn.split(/[\s\-\/]+/);
                 for(var i=0;i<keys.length;i++){
                     var kn=norm(keys[i]);
@@ -944,10 +943,16 @@ function initMap(){
                 }
             });
 
-            // Draw each track segment as single centered line
-            osmData.tracks.forEach(function(seg){
+            // Draw eastbound tracks (→ Chalezeule/Viotte) = blue
+            (osmData.tracksEast||[]).forEach(function(seg){
                 if(seg.length<2) return;
-                L.polyline(seg,{color:'#00A5C2',weight:3,opacity:.7}).addTo(mapInstance);
+                L.polyline(seg,{color:'#4A9FFF',weight:3,opacity:.7}).addTo(mapInstance);
+                seg.forEach(function(p){allBounds.push(p);});
+            });
+            // Draw westbound tracks (← Hauts du Chazal) = orange
+            (osmData.tracksWest||[]).forEach(function(seg){
+                if(seg.length<2) return;
+                L.polyline(seg,{color:'#FF8C00',weight:3,opacity:.7}).addTo(mapInstance);
                 seg.forEach(function(p){allBounds.push(p);});
             });
 
@@ -1144,8 +1149,18 @@ function fetchPositions(){
         var vehKeys=Object.keys(vehicles);
         logConn('ok','🚋 '+vehKeys.length+' trams physiques (numVehicule)','ok');
 
-        vehKeys.forEach(function(numVeh){
-            var v=vehicles[numVeh];
+        // Merge with cache: keep vehicles that disappeared for max 2 cycles
+        vehKeys.forEach(function(k){ vehicleCache[k]={data:vehicles[k],miss:0}; });
+        Object.keys(vehicleCache).forEach(function(k){
+            if(!vehicles[k]){
+                vehicleCache[k].miss++;
+                if(vehicleCache[k].miss>=3) delete vehicleCache[k];
+            }
+        });
+        var renderKeys=Object.keys(vehicleCache);
+
+        renderKeys.forEach(function(numVeh){
+            var v=vehicleCache[numVeh].data;
             var line=v.idLigne==='101'?'T1':v.idLigne==='102'?'T2':v.numLigne;
             if(!mapLineFilter[line]) return;
             var color=v.idLigne==='101'?'#00A5C2':'#006D78';
@@ -1199,21 +1214,22 @@ function addTramMarker(lat,lng,bgCol,label,arrow,destShort,min,charge,numVeh,fia
         else if(charge<60) chargeIcon='<span style="color:#FF9800;font-size:8px;margin-left:2px">●</span>';
         else chargeIcon='<span style="color:#F44336;font-size:8px;margin-left:2px">●</span>';
     }
-    // Determine display text: 0 at station, <1' approaching, arrow otherwise
-    var displayText=arrow;
-    var displayCol=arrowCol;
+    // Arrow always visible + time indicator when at station or approaching
+    var extraText='';
+    var extraCol='';
     if(min!==null&&min!==undefined){
         if(min===0){
-            displayText='0';
-            displayCol='#4CAF50';
+            extraText=' 0';
+            extraCol='#4CAF50';
         } else if(min<1){
-            displayText="<1'";
-            displayCol='#FFC107';
+            extraText=" <1'";
+            extraCol='#FFC107';
         }
     }
     var html='<div style="display:inline-flex;align-items:center;gap:1px;padding:3px 7px;border-radius:14px;font-size:12px;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid '+arrowCol+';white-space:nowrap;background:rgba(15,15,22,.92);">'
         +'🚋'+label
-        +'<span style="color:'+displayCol+';font-size:14px;font-weight:900;margin:0 1px">'+displayText+'</span>'
+        +'<span style="color:'+arrowCol+';font-size:14px;font-weight:900;margin:0 1px">'+arrow+'</span>'
+        +(extraText?'<span style="color:'+extraCol+';font-size:11px;font-weight:900">'+extraText+'</span>':'')
         +chargeIcon
         +'</div>';
     var icon=L.divIcon({
