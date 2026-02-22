@@ -847,7 +847,6 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').cat
 var mapInstance=null, mapActive=false, mapPositionTimer=null, userMarker=null;
 var vehicleMarkers=[], stationMarkers=[];
 var mapLineFilter={T1:true,T2:true};
-var vehicleCache={}; // {numVeh: {data, missCount}}
 
 function toggleMapLine(line){
     mapLineFilter[line]=!mapLineFilter[line];
@@ -1142,18 +1141,8 @@ function fetchPositions(){
         var vehKeys=Object.keys(vehicles);
         logConn('ok','🚋 '+vehKeys.length+' trams physiques (numVehicule)','ok');
 
-        // Merge with cache: keep vehicles that disappeared for max 2 cycles
-        vehKeys.forEach(function(k){ vehicleCache[k]={data:vehicles[k],miss:0}; });
-        Object.keys(vehicleCache).forEach(function(k){
-            if(!vehicles[k]){
-                vehicleCache[k].miss++;
-                if(vehicleCache[k].miss>=3) delete vehicleCache[k];
-            }
-        });
-        var renderKeys=Object.keys(vehicleCache);
-
-        renderKeys.forEach(function(numVeh){
-            var v=vehicleCache[numVeh].data;
+        vehKeys.forEach(function(numVeh){
+            var v=vehicles[numVeh];
             var line=v.idLigne==='101'?'T1':v.idLigne==='102'?'T2':v.numLigne;
             if(!mapLineFilter[line]) return;
             var color=v.idLigne==='101'?'#00A5C2':'#006D78';
@@ -1166,7 +1155,7 @@ function fetchPositions(){
             var c0=COORDS[stKey];
             var lat=c0[0],lng=c0[1];
 
-            // Interpolate: tram is approaching this station from the previous one
+            // Interpolate position between previous station and target station
             var stIdx=findStationIdx(line,v.station);
             if(stIdx>=0&&v.min>=1){
                 var sts=LINES[line]?LINES[line].stations:null;
