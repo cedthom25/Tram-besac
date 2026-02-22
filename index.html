@@ -942,13 +942,10 @@ function initMap(){
                 }
             });
 
-            // Color each segment by bearing: eastbound (→) = blue, westbound (←) = orange
+            // Color each segment
             osmData.tracks.forEach(function(seg){
                 if(seg.length<2) return;
-                // Use bearing from first to last point
-                var dLon=seg[seg.length-1][1]-seg[0][1];
-                var col=dLon>=0?'#4A9FFF':'#FF8C00'; // east=blue, west=orange
-                L.polyline(seg,{color:col,weight:3,opacity:.7}).addTo(mapInstance);
+                L.polyline(seg,{color:'#00BCD4',weight:4,opacity:.75}).addTo(mapInstance);
                 seg.forEach(function(p){allBounds.push(p);});
             });
 
