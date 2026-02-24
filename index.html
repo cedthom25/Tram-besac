@@ -1160,7 +1160,31 @@ function fetchPositions(){
             _lastPosData=fingerprint;
             _lastPosTime=now;
         }
-        _posElapsed=(now-_lastPosTime)/1000; // seconds since last real API update
+        _posElapsed=(now-_lastPosTime)/1000;
+
+        // DEBUG: log ALL vehicle details
+        logConn('info','═══ POSITIONS DEBUG ═══ elapsed='+_posElapsed.toFixed(1)+'s fingerprint changed='+(fingerprint!==_lastPosData?'NO':'YES'),'dim');
+        vehKeys.forEach(function(vk){
+            var dv=vehicles[vk];
+            var dLine=dv.idLigne==='101'?'T1':'T2';
+            var dDir=dv.sensAller?'→':'←';
+            var dSegTime=(dv.nextSec!==null&&dv.nextSec>dv.sec)?(dv.nextSec-dv.sec):90;
+            var dCurSec=Math.max(0,dv.sec-_posElapsed);
+            var dFrac=Math.min(dCurSec/dSegTime,1.0);
+            var dStKey=matchApiStation(dv.station);
+            var dStIdx=dStKey?findStationIdx(dLine,dv.station):-1;
+            var dSts=LINES[dLine]?LINES[dLine].stations:null;
+            var dPrevName='?';
+            if(dSts&&dStIdx>=0){
+                var dPi=dv.sensAller?(dStIdx-1):(dStIdx+1);
+                if(dPi>=0&&dPi<dSts.length) dPrevName=dSts[dPi];
+            }
+            var dNextSt=dv.nextStation||'?';
+            // Count all sightings for this vehicle
+            var dSightCount=vehicleSightings[vk]?vehicleSightings[vk].length:0;
+            logConn('info','🚋 '+dLine+dDir+' v'+vk+' | sec='+dv.sec+' min='+dv.min+' | segT='+dSegTime+'s curSec='+dCurSec.toFixed(0)+' frac='+dFrac.toFixed(3)+' | cible='+dv.station+' prev='+dPrevName+' | next='+dNextSt+' nextSec='+(dv.nextSec||'?')+' | sightings='+dSightCount+' dest='+dv.dest+' ch='+dv.charge,'dim');
+        });
+        logConn('info','═══════════════════','dim'); // seconds since last real API update
 
         vehKeys.forEach(function(numVeh){
             var v=vehicles[numVeh];
