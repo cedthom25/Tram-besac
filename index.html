@@ -1096,6 +1096,8 @@ function findStationIdx(lineName,apiName){
     return -1;
 }
 
+var _lastPosData='', _lastPosTime=0, _posElapsed=0;
+
 function fetchPositions(){
     vehicleMarkers.forEach(function(m){mapInstance.removeLayer(m);});
     vehicleMarkers=[];
@@ -1151,6 +1153,15 @@ function fetchPositions(){
         var vehKeys=Object.keys(vehicles);
         logConn('ok','🚋 '+vehKeys.length+' trams physiques (numVehicule)','ok');
 
+        // Track if API data actually changed (for smooth interpolation between updates)
+        var fingerprint=vehKeys.sort().map(function(k){return k+':'+vehicles[k].sec;}).join(',');
+        var now=Date.now();
+        if(fingerprint!==_lastPosData){
+            _lastPosData=fingerprint;
+            _lastPosTime=now;
+        }
+        _posElapsed=(now-_lastPosTime)/1000; // seconds since last real API update
+
         vehKeys.forEach(function(numVeh){
             var v=vehicles[numVeh];
             var line=v.idLigne==='101'?'T1':v.idLigne==='102'?'T2':v.numLigne;
@@ -1165,19 +1176,32 @@ function fetchPositions(){
             var c0=COORDS[stKey];
             var lat=c0[0],lng=c0[1];
 
-            // Interpolate using real travel time in seconds between 2 consecutive stations
-            if(v.sec>0&&v.nextStation&&v.nextSec!==null){
-                var nextKey=matchApiStation(v.nextStation);
-                if(nextKey){
-                    var cNext=COORDS[nextKey];
-                    if(cNext){
-                        var travelSec=v.nextSec-v.sec; // real seconds between stations
-                        if(travelSec>0){
-                            var frac=v.sec/travelSec; // 0=at station, 1=at next station
-                            frac=Math.min(frac,0.95);
-                            lat=c0[0]+(cNext[0]-c0[0])*frac;
-                            lng=c0[1]+(cNext[1]-c0[1])*frac;
-                        }
+            // Place tram at correct position along the line
+            var stIdx=findStationIdx(line,v.station);
+            if(stIdx>=0&&v.sec>0){
+                var sts=LINES[line]?LINES[line].stations:null;
+                if(sts){
+                    // Real inter-station travel time from sightings (or fallback 90s)
+                    var segTime=(v.nextSec!==null&&v.nextSec>v.sec)?(v.nextSec-v.sec):90;
+                    // Adjust with local elapsed time for smooth 5s movement
+                    var curSec=Math.max(0,v.sec-_posElapsed);
+                    // How many complete segments back from target station?
+                    var segsBack=Math.floor(curSec/segTime);
+                    var remainder=curSec-segsBack*segTime;
+                    // Back direction: opposite of travel
+                    var backDir=v.sensAller?-1:1;
+                    var approachIdx=stIdx+backDir*segsBack;
+                    var leftIdx=stIdx+backDir*(segsBack+1);
+                    // Clamp to valid range
+                    approachIdx=Math.max(0,Math.min(approachIdx,sts.length-1));
+                    leftIdx=Math.max(0,Math.min(leftIdx,sts.length-1));
+                    var cApproach=COORDS[sts[approachIdx]];
+                    var cLeft=COORDS[sts[leftIdx]];
+                    if(cApproach&&cLeft){
+                        // frac: 0=at approach station, 1=at left station
+                        var frac=segTime>0?remainder/segTime:0;
+                        lat=cApproach[0]+(cLeft[0]-cApproach[0])*frac;
+                        lng=cApproach[1]+(cLeft[1]-cApproach[1])*frac;
                     }
                 }
             }
