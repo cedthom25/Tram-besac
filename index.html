@@ -1164,7 +1164,7 @@ function fetchPositions(){
             _lastPosData=fingerprint;
             _lastPosTime=nowMs;
 
-            // Build/update absolute timelines per vehicle
+            // Build absolute timelines per vehicle from ALL sightings
             vehKeys.forEach(function(vk){
                 var v=vehicles[vk];
                 var sights=vehicleSightings[vk];
@@ -1172,39 +1172,56 @@ function fetchPositions(){
                 var sts=LINES[line]?LINES[line].stations:null;
                 if(!sights||!sts) return;
 
-                // New timeline from current sightings (absolute arrival times)
-                var newTL=[];
-                var newIdxSet={};
+                // Map sightings to {idx, abs} — deduplicate by idx, keep lowest sec
+                var byIdx={};
                 for(var i=0;i<sights.length;i++){
                     var idx=findStationIdx(line,sights[i].station);
-                    if(idx>=0&&!newIdxSet[idx]){
-                        newTL.push({idx:idx, abs:nowS+sights[i].sec});
-                        newIdxSet[idx]=true;
-                    }
+                    if(idx<0) continue;
+                    var absT=nowS+sights[i].sec;
+                    if(!byIdx[idx]||absT<byIdx[idx]) byIdx[idx]=absT;
                 }
 
-                // Merge: keep old entries for stations already passed (not in new data)
-                var old=_vehTimelines[vk];
-                if(old){
-                    for(var i=0;i<old.length;i++){
-                        if(old[i].abs<=nowS+2&&!newIdxSet[old[i].idx]){
-                            newTL.push(old[i]);
+                // Sort entries by abs time
+                var raw=[];
+                for(var k in byIdx) raw.push({idx:parseInt(k),abs:byIdx[k]});
+                raw.sort(function(a,b){return a.abs-b.abs;});
+
+                // Fill gaps: insert intermediate stations between non-consecutive entries
+                var filled=[];
+                for(var i=0;i<raw.length;i++){
+                    filled.push(raw[i]);
+                    if(i<raw.length-1){
+                        var diff=raw[i+1].idx-raw[i].idx;
+                        var absDiff=Math.abs(diff);
+                        if(absDiff>1){
+                            var step=diff>0?1:-1;
+                            var timGap=raw[i+1].abs-raw[i].abs;
+                            for(var j=1;j<absDiff;j++){
+                                filled.push({
+                                    idx:raw[i].idx+step*j,
+                                    abs:raw[i].abs+timGap*j/absDiff
+                                });
+                            }
                         }
                     }
                 }
 
-                // Sort by absolute time, deduplicate by idx
-                newTL.sort(function(a,b){return a.abs-b.abs;});
-                var seen={};var deduped=[];
-                for(var i=0;i<newTL.length;i++){
-                    if(!seen[newTL[i].idx]){
-                        deduped.push(newTL[i]);
-                        seen[newTL[i].idx]=true;
+                // Merge old passed entries (stations the tram already went through)
+                var old=_vehTimelines[vk];
+                var newIdxSet={};
+                for(var i=0;i<filled.length;i++) newIdxSet[filled[i].idx]=true;
+                if(old){
+                    for(var i=0;i<old.length;i++){
+                        if(!newIdxSet[old[i].idx]&&old[i].abs<=nowS+5){
+                            filled.push(old[i]);
+                            newIdxSet[old[i].idx]=true;
+                        }
                     }
                 }
 
-                // Prune very old entries (>5 min in the past)
-                _vehTimelines[vk]=deduped.filter(function(e){return e.abs>nowS-300;});
+                // Re-sort and prune
+                filled.sort(function(a,b){return a.abs-b.abs;});
+                _vehTimelines[vk]=filled.filter(function(e){return e.abs>nowS-120;});
             });
 
             // Clean up timelines for vehicles no longer seen
@@ -1214,43 +1231,33 @@ function fetchPositions(){
         }
         _posElapsed=(nowMs-_lastPosTime)/1000;
 
-        // DEBUG: log vehicle positions
-        logConn('info','═══ POS DEBUG ═══ elapsed='+_posElapsed.toFixed(1)+'s fp='+(fpChanged?'NEW':'same'),'dim');
+        // DEBUG
+        logConn('info','═══ POS v42x ═══ Δ='+_posElapsed.toFixed(1)+'s fp='+(fpChanged?'NEW':'same'),'dim');
         vehKeys.forEach(function(vk){
             var dv=vehicles[vk];
             var dLine=dv.idLigne==='101'?'T1':'T2';
             var dDir=dv.sensAller?'→':'←';
             var tl=_vehTimelines[vk];
-            var dSeg='?';var dFrac='?';var dFrom='?';var dTo='?';
+            var dInfo='no-tl';
             if(tl&&tl.length>0){
                 var sts=LINES[dLine]?LINES[dLine].stations:null;
                 if(sts){
-                    // Find current segment
-                    var placed=false;
+                    var found=false;
                     for(var i=0;i<tl.length-1;i++){
                         if(nowS>=tl[i].abs&&nowS<tl[i+1].abs){
                             var gap=tl[i+1].abs-tl[i].abs;
-                            var el=nowS-tl[i].abs;
-                            dFrom=sts[tl[i].idx]||'?';
-                            dTo=sts[tl[i+1].idx]||'?';
-                            dFrac=(gap>0?(el/gap):0).toFixed(3);
-                            dSeg=gap.toFixed(0)+'s';
-                            placed=true;break;
+                            var f=gap>0?(nowS-tl[i].abs)/gap:0;
+                            dInfo=(sts[tl[i].idx]||'?')+'→'+(sts[tl[i+1].idx]||'?')+' f='+f.toFixed(2)+' g='+gap.toFixed(0)+'s';
+                            found=true;break;
                         }
                     }
-                    if(!placed&&nowS<tl[0].abs){
-                        var tLeft=(tl[0].abs-nowS);
-                        dTo=sts[tl[0].idx]||'?';
-                        var pStep=dv.sensAller?-1:1;
-                        var pIdx=Math.max(0,Math.min(tl[0].idx+pStep,sts.length-1));
-                        dFrom=sts[pIdx]||'?';
-                        var est=tl.length>=2?(tl[1].abs-tl[0].abs):90;
-                        dFrac=(est>0?Math.min(tLeft/est,1.0):0).toFixed(3);
-                        dSeg=est.toFixed(0)+'s(est)';
+                    if(!found){
+                        if(nowS<tl[0].abs) dInfo='avant '+(sts[tl[0].idx]||'?')+' dans '+((tl[0].abs-nowS).toFixed(0))+'s';
+                        else dInfo='passé '+(sts[tl[tl.length-1].idx]||'?');
                     }
                 }
             }
-            logConn('info','🚋 '+dLine+dDir+' v'+vk+' | sec='+dv.sec+' | '+dFrom+'→'+dTo+' frac='+dFrac+' seg='+dSeg+' | tl='+((tl&&tl.length)||0)+' dest='+dv.dest+' ch='+dv.charge,'dim');
+            logConn('info','🚋 '+dLine+dDir+' v'+vk+' | sec='+dv.sec+' tl='+((tl&&tl.length)||0)+' | '+dInfo+' | dest='+dv.dest+' ch='+dv.charge,'dim');
         });
         logConn('info','═══════════════════','dim');
 
@@ -1275,12 +1282,11 @@ function fetchPositions(){
             if(tl&&tl.length>0&&sts){
                 var placed=false;
 
-                // Case A: now is between two timeline entries → interpolate on that segment
+                // Case A: now is between two timeline entries → smooth interpolation
                 for(var i=0;i<tl.length-1;i++){
                     if(nowS>=tl[i].abs&&nowS<tl[i+1].abs){
                         var gap=tl[i+1].abs-tl[i].abs;
-                        var elapsed=nowS-tl[i].abs;
-                        var frac=gap>0?elapsed/gap:0;
+                        var frac=gap>0?(nowS-tl[i].abs)/gap:0;
                         var cFrom=COORDS[sts[tl[i].idx]];
                         var cTo=COORDS[sts[tl[i+1].idx]];
                         if(cFrom&&cTo){
@@ -1291,31 +1297,32 @@ function fetchPositions(){
                     }
                 }
 
-                // Case B: now is before first timeline entry → approaching first station
+                // Case B: before first timeline entry → approaching
                 if(!placed&&nowS<tl[0].abs){
                     var timeLeft=tl[0].abs-nowS;
+                    // Estimate segment time from timeline
                     var estSeg=tl.length>=2?(tl[1].abs-tl[0].abs):90;
+                    if(estSeg<10) estSeg=90; // sanity
+                    // Previous station (opposite to travel direction)
                     var prevStep=v.sensAller?-1:1;
+                    var pIdx=tl[0].idx+prevStep;
+                    pIdx=Math.max(0,Math.min(pIdx,sts.length-1));
 
-                    if(timeLeft<=estSeg){
-                        // Within 1 segment of first station
-                        var pIdx=tl[0].idx+prevStep;
-                        pIdx=Math.max(0,Math.min(pIdx,sts.length-1));
-                        if(pIdx!==tl[0].idx){
-                            var frac=estSeg>0?timeLeft/estSeg:0;
-                            var cA=COORDS[sts[tl[0].idx]];
-                            var cF=COORDS[sts[pIdx]];
-                            if(cA&&cF){
-                                lat=cA[0]+(cF[0]-cA[0])*frac;
-                                lng=cA[1]+(cF[1]-cA[1])*frac;
-                            }
-                        }else{
-                            // Terminus: stay at station
-                            var cT=COORDS[sts[tl[0].idx]];
-                            if(cT){lat=cT[0];lng=cT[1];}
+                    if(pIdx===tl[0].idx){
+                        // At terminus — wait here
+                        var cT=COORDS[sts[tl[0].idx]];
+                        if(cT){lat=cT[0];lng=cT[1];}
+                    }else if(timeLeft<=estSeg){
+                        // Within 1 segment
+                        var frac=estSeg>0?timeLeft/estSeg:0;
+                        var cA=COORDS[sts[tl[0].idx]];
+                        var cF=COORDS[sts[pIdx]];
+                        if(cA&&cF){
+                            lat=cA[0]+(cF[0]-cA[0])*frac;
+                            lng=cA[1]+(cF[1]-cA[1])*frac;
                         }
                     }else{
-                        // Multi-segment back from first station
+                        // Multi-segment back
                         var segsBack=Math.floor(timeLeft/estSeg);
                         var rem=timeLeft-segsBack*estSeg;
                         var aIdx=tl[0].idx+prevStep*segsBack;
@@ -1338,7 +1345,7 @@ function fetchPositions(){
                     placed=true;
                 }
 
-                // Case C: now is past last timeline entry → at last station
+                // Case C: past last entry → at last station
                 if(!placed){
                     var cL=COORDS[sts[tl[tl.length-1].idx]];
                     if(cL){lat=cL[0];lng=cL[1];}
