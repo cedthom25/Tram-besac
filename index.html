@@ -1176,32 +1176,27 @@ function fetchPositions(){
             var c0=COORDS[stKey];
             var lat=c0[0],lng=c0[1];
 
-            // Place tram at correct position along the line
+            // Simple interpolation: tram is between previous station and target station
+            // v.sec = seconds until tram reaches target station (best/closest)
+            // segTime = travel time between 2 adjacent stations (from sightings)
             var stIdx=findStationIdx(line,v.station);
             if(stIdx>=0&&v.sec>0){
                 var sts=LINES[line]?LINES[line].stations:null;
                 if(sts){
-                    // Real inter-station travel time from sightings (or fallback 90s)
-                    var segTime=(v.nextSec!==null&&v.nextSec>v.sec)?(v.nextSec-v.sec):90;
-                    // Adjust with local elapsed time for smooth 5s movement
-                    var curSec=Math.max(0,v.sec-_posElapsed);
-                    // How many complete segments back from target station?
-                    var segsBack=Math.floor(curSec/segTime);
-                    var remainder=curSec-segsBack*segTime;
-                    // Back direction: opposite of travel
-                    var backDir=v.sensAller?-1:1;
-                    var approachIdx=stIdx+backDir*segsBack;
-                    var leftIdx=stIdx+backDir*(segsBack+1);
-                    // Clamp to valid range
-                    approachIdx=Math.max(0,Math.min(approachIdx,sts.length-1));
-                    leftIdx=Math.max(0,Math.min(leftIdx,sts.length-1));
-                    var cApproach=COORDS[sts[approachIdx]];
-                    var cLeft=COORDS[sts[leftIdx]];
-                    if(cApproach&&cLeft){
-                        // frac: 0=at approach station, 1=at left station
-                        var frac=segTime>0?remainder/segTime:0;
-                        lat=cApproach[0]+(cLeft[0]-cApproach[0])*frac;
-                        lng=cApproach[1]+(cLeft[1]-cApproach[1])*frac;
+                    // Previous station in direction of travel
+                    var prevIdx=v.sensAller?(stIdx-1):(stIdx+1);
+                    if(prevIdx>=0&&prevIdx<sts.length){
+                        var cPrev=COORDS[sts[prevIdx]];
+                        if(cPrev){
+                            // segTime from sightings, fallback 90s
+                            var segTime=(v.nextSec!==null&&v.nextSec>v.sec)?(v.nextSec-v.sec):90;
+                            // Adjust with local elapsed time for smooth 5s animation
+                            var curSec=Math.max(0,v.sec-_posElapsed);
+                            // frac: 0=at target station, 1=at previous station
+                            var frac=Math.min(curSec/segTime,1.0);
+                            lat=c0[0]+(cPrev[0]-c0[0])*frac;
+                            lng=c0[1]+(cPrev[1]-c0[1])*frac;
+                        }
                     }
                 }
             }
