@@ -1169,20 +1169,20 @@ function fetchPositions(){
             var dLine=dv.idLigne==='101'?'T1':'T2';
             var dDir=dv.sensAller?'→':'←';
             var dSegTime=(dv.nextSec!==null&&dv.nextSec>dv.sec)?(dv.nextSec-dv.sec):90;
-            var dCurSec=Math.max(0,dv.sec-_posElapsed);
-            var dFrac=Math.min(dCurSec/dSegTime,1.0);
-            var dStKey=matchApiStation(dv.station);
-            var dStIdx=dStKey?findStationIdx(dLine,dv.station):-1;
+            var dTotalBack=Math.max(0,dv.sec-_posElapsed);
+            var dSegsBack=Math.floor(dTotalBack/dSegTime);
+            var dRemainder=dTotalBack-dSegsBack*dSegTime;
+            var dFrac=(dSegTime>0)?Math.min(dRemainder/dSegTime,1.0):0;
+            var dStIdx=matchApiStation(dv.station)?findStationIdx(dLine,dv.station):-1;
             var dSts=LINES[dLine]?LINES[dLine].stations:null;
-            var dPrevName='?';
-            if(dSts&&dStIdx>=0){
-                var dPi=dv.sensAller?(dStIdx-1):(dStIdx+1);
-                if(dPi>=0&&dPi<dSts.length) dPrevName=dSts[dPi];
-            }
+            var dBackStep=dv.sensAller?-1:1;
+            var dApprIdx=dStIdx>=0?Math.max(0,Math.min(dStIdx+dBackStep*dSegsBack,(dSts?dSts.length-1:0))):-1;
+            var dFromIdx=dStIdx>=0?Math.max(0,Math.min(dApprIdx+dBackStep,(dSts?dSts.length-1:0))):-1;
+            var dApprName=(dSts&&dApprIdx>=0)?dSts[dApprIdx]:'?';
+            var dFromName=(dSts&&dFromIdx>=0)?dSts[dFromIdx]:'?';
             var dNextSt=dv.nextStation||'?';
-            // Count all sightings for this vehicle
             var dSightCount=vehicleSightings[vk]?vehicleSightings[vk].length:0;
-            logConn('info','🚋 '+dLine+dDir+' v'+vk+' | sec='+dv.sec+' min='+dv.min+' | segT='+dSegTime+'s curSec='+dCurSec.toFixed(0)+' frac='+dFrac.toFixed(3)+' | cible='+dv.station+' prev='+dPrevName+' | next='+dNextSt+' nextSec='+(dv.nextSec||'?')+' | sightings='+dSightCount+' dest='+dv.dest+' ch='+dv.charge,'dim');
+            logConn('info','🚋 '+dLine+dDir+' v'+vk+' | sec='+dv.sec+' segT='+dSegTime+' segsBack='+dSegsBack+' rem='+dRemainder.toFixed(0)+' frac='+dFrac.toFixed(3)+' | entre '+dFromName+'→'+dApprName+' | cible='+dv.station+' next='+dNextSt+' | sights='+dSightCount+' dest='+dv.dest+' ch='+dv.charge,'dim');
         });
         logConn('info','═══════════════════','dim'); // seconds since last real API update
 
@@ -1200,27 +1200,32 @@ function fetchPositions(){
             var c0=COORDS[stKey];
             var lat=c0[0],lng=c0[1];
 
-            // Simple interpolation: tram is between previous station and target station
-            // v.sec = seconds until tram reaches target station (best/closest)
-            // segTime = travel time between 2 adjacent stations (from sightings)
+            // Multi-segment interpolation: tram may be several stations behind cible
             var stIdx=findStationIdx(line,v.station);
             if(stIdx>=0&&v.sec>0){
                 var sts=LINES[line]?LINES[line].stations:null;
                 if(sts){
-                    // Previous station in direction of travel
-                    var prevIdx=v.sensAller?(stIdx-1):(stIdx+1);
-                    if(prevIdx>=0&&prevIdx<sts.length){
-                        var cPrev=COORDS[sts[prevIdx]];
-                        if(cPrev){
-                            // segTime from sightings, fallback 90s
-                            var segTime=(v.nextSec!==null&&v.nextSec>v.sec)?(v.nextSec-v.sec):90;
-                            // Adjust with local elapsed time for smooth 5s animation
-                            var curSec=Math.max(0,v.sec-_posElapsed);
-                            // frac: 0=at target station, 1=at previous station
-                            var frac=Math.min(curSec/segTime,1.0);
-                            lat=c0[0]+(cPrev[0]-c0[0])*frac;
-                            lng=c0[1]+(cPrev[1]-c0[1])*frac;
-                        }
+                    var segTime=(v.nextSec!==null&&v.nextSec>v.sec)?(v.nextSec-v.sec):90;
+                    var totalBack=Math.max(0,v.sec-_posElapsed);
+                    var segsBack=Math.floor(totalBack/segTime);
+                    var remainder=totalBack-segsBack*segTime;
+                    // backStep: opposite of travel direction
+                    var backStep=v.sensAller?-1:1;
+                    // approachIdx = station tram is heading to (within current segment)
+                    var approachIdx=stIdx+backStep*segsBack;
+                    // fromIdx = station tram is coming from
+                    var fromIdx=approachIdx+backStep;
+                    // Clamp
+                    approachIdx=Math.max(0,Math.min(approachIdx,sts.length-1));
+                    fromIdx=Math.max(0,Math.min(fromIdx,sts.length-1));
+                    var cA=COORDS[sts[approachIdx]];
+                    var cF=COORDS[sts[fromIdx]];
+                    if(cA&&cF){
+                        var frac=(segTime>0)?Math.min(remainder/segTime,1.0):0;
+                        lat=cA[0]+(cF[0]-cA[0])*frac;
+                        lng=cA[1]+(cF[1]-cA[1])*frac;
+                    }else if(cA){
+                        lat=cA[0]; lng=cA[1];
                     }
                 }
             }
